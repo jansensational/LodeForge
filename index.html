@@ -2123,7 +2123,7 @@ function showWin(){
 // ---------- version ----------
 // Bump BUILD (and version.json beside index.html, which the live site serves) with every release.
 // A copy that finds a newer version.json on the live site tells the player an update is out.
-const BUILD={version:'0.1.0',date:'2026-11-24',home:'https://jansensational.github.io/LodeForge/',updateUrl:'https://jansensational.github.io/LodeForge/version.json'};
+const BUILD={version:'0.1.1',date:'2026-11-24',home:'https://jansensational.github.io/LodeForge/',updateUrl:'https://jansensational.github.io/LodeForge/version.json'};
 const verNewer=(a,b)=>{const x=String(a).split('.').map(Number),y=String(b).split('.').map(Number);for(let i=0;i<3;i++){const p=x[i]||0,q=y[i]||0;if(p!==q)return p>q;}return false;};
 const onLiveSite=()=>location.href.startsWith(BUILD.home);
 let updateSeen=null;
@@ -2314,7 +2314,8 @@ function bindEvents(){
   });
   $('updateLater').addEventListener('click',()=>{$('update').hidden=true;});
   $('updateGo').addEventListener('click',()=>{
-    if(onLiveSite()){save();writeWorldFile();setTimeout(()=>location.reload(),300);}
+    // GitHub Pages caches the page for up to 10 minutes, so load the new version's own address rather than reloading
+    if(onLiveSite()){save();writeWorldFile();setTimeout(()=>{location.href=BUILD.home+'?v='+encodeURIComponent(updateSeen);},300);}
     else window.open(BUILD.home,'_blank','noopener');
   });
   $('saveFile').addEventListener('click',saveWorldFile);

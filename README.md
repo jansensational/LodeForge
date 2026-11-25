@@ -4,7 +4,15 @@ A dwarven underground factory game in one HTML file. Mine ore, automate with bel
 
 ## Play
 
-Open `index.html` in a browser, or play the hosted copy on GitHub Pages once it is turned on.
+Play in your browser: https://jansensational.github.io/LodeForge/
+
+You can also open `index.html` directly.
+
+## Versions
+
+- The version number lives in two places: `BUILD.version` in `index.html` and `version.json`.
+- Bump both for every release, and commit with the version as the message, e.g. `v0.1.1`.
+- A copy of the game that finds a newer `version.json` on the live site tells the player an update is out.
 
 ## Controls
 

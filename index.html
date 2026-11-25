@@ -111,6 +111,9 @@ button:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
 .rec.locked{opacity:.55}
 .small{color:var(--muted);font-size:11px}
 #danger{display:flex;gap:6px;align-items:center}
+.ver{font:400 10px var(--mono);color:var(--muted);letter-spacing:0;text-transform:none;margin-left:4px}
+#update{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:15;display:flex;flex-wrap:wrap;align-items:center;gap:8px;max-width:calc(100vw - 32px);box-sizing:border-box}
+#update #updateGo{background:var(--ember);color:#1b1206;border:0;border-radius:3px;padding:4px 10px;font-weight:600;cursor:pointer}
 #worldFile{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:8px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 #worldFile .eyebrow{margin-right:4px}
 #autoNote{flex-basis:100%}
@@ -160,7 +163,7 @@ button:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
 </div>
 
 <div id="help" class="card">
-  <div class="top"><span class="eyebrow">Controls</span><button class="ghost" id="helpBtn">Hide</button></div>
+  <div class="top"><span class="eyebrow">Controls <span class="ver" id="verHelp"></span></span><button class="ghost" id="helpBtn">Hide</button></div>
   <div class="rows" style="margin-top:6px">
     <div class="row"><span>Move · jump</span><kbd>A D · W / Space</kbd></div>
     <div class="row"><span>Mine</span><kbd>Left mouse</kbd></div>
@@ -189,12 +192,13 @@ button:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
 <div id="rot"></div>
 <div id="hotbar" role="toolbar" aria-label="Hotbar"></div>
 <div id="toasts"></div>
+<div id="update" class="card" hidden role="status"><span id="updateText"></span><button id="updateGo">Save and reload</button><button class="ghost" id="updateLater">Later</button></div>
 <div id="tip" hidden></div>
 
 <div id="pack" hidden>
   <div class="card" role="dialog" aria-label="Pack and crafting">
     <div class="head">
-      <div><div class="eyebrow">Pack</div><div class="small">Click an item to put it in the selected hotbar slot.</div></div>
+      <div><div class="eyebrow">Pack <span class="ver" id="verPack"></span></div><div class="small">Click an item to put it in the selected hotbar slot.</div></div>
       <div id="danger"><button class="ghost" id="newWorld">New world</button><button class="ghost" id="closePack">Close · Tab</button></div>
     </div>
     <div id="worldFile">
@@ -2116,6 +2120,31 @@ function showWin(){
 }
 
 // ---------- save / load ----------
+// ---------- version ----------
+// Bump BUILD (and version.json beside index.html, which the live site serves) with every release.
+// A copy that finds a newer version.json on the live site tells the player an update is out.
+const BUILD={version:'0.1.0',date:'2026-11-24',home:'https://jansensational.github.io/LodeForge/',updateUrl:'https://jansensational.github.io/LodeForge/version.json'};
+const verNewer=(a,b)=>{const x=String(a).split('.').map(Number),y=String(b).split('.').map(Number);for(let i=0;i<3;i++){const p=x[i]||0,q=y[i]||0;if(p!==q)return p>q;}return false;};
+const onLiveSite=()=>location.href.startsWith(BUILD.home);
+let updateSeen=null;
+async function checkForUpdate(){
+  if(updateSeen) return;
+  try{
+    const r=await fetch(BUILD.updateUrl+'?t='+Date.now(),{cache:'no-store'}); if(!r.ok) return;
+    const v=await r.json();
+    if(v&&typeof v.version==='string'&&verNewer(v.version,BUILD.version)){
+      updateSeen=v.version;
+      $('updateText').textContent='Lodeforge v'+v.version+' is out. You are playing v'+BUILD.version+'.';
+      $('updateGo').textContent=onLiveSite()?'Save and reload':'Open the new version';
+      $('update').hidden=false;
+    }
+  }catch(err){}
+}
+function showVersion(){
+  document.title='Lodeforge v'+BUILD.version;
+  const d=new Date(BUILD.date+'T12:00:00').toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
+  for(const id of ['verHelp','verPack']){const el=$(id);if(el)el.textContent='v'+BUILD.version+(id==='verPack'?' · '+d:'');}
+}
 const KEY='lodeforge-save-v2';
 function b64(u8){let s='';for(let i=0;i<u8.length;i+=8192)s+=String.fromCharCode.apply(null,u8.subarray(i,i+8192));return btoa(s);}
 function unb64(str){const s=atob(str),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;}
@@ -2150,7 +2179,7 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(serialize()));}catch
 // .json file everywhere. Plain uncompressed saves (the raw serialize() object) load too.
 const gz=(bytes,way)=>new Response(new Blob([bytes]).stream().pipeThrough(way==='in'?new CompressionStream('gzip'):new DecompressionStream('gzip')));
 async function packWorld(){
-  const json=JSON.stringify(serialize()), meta={lodeforge:1,saved:new Date().toISOString(),minutes:Math.round(S.time/60)};
+  const json=JSON.stringify(serialize()), meta={lodeforge:1,build:BUILD.version,saved:new Date().toISOString(),minutes:Math.round(S.time/60)};
   if(typeof CompressionStream==='function'){
     try{const buf=new Uint8Array(await gz(new TextEncoder().encode(json),'in').arrayBuffer());return JSON.stringify({...meta,format:'gzip-base64',data:b64(buf)});}catch(err){}
   }
@@ -2283,6 +2312,11 @@ function bindEvents(){
     armed=false;nw.textContent='New world';nw.className='ghost';
     S=genWorld((Math.random()*1e9)|0);indexVents();setPack(false);invDirty=hudDirty=netDirty=true;save();toast('A new hold, freshly delved.',true);
   });
+  $('updateLater').addEventListener('click',()=>{$('update').hidden=true;});
+  $('updateGo').addEventListener('click',()=>{
+    if(onLiveSite()){save();writeWorldFile();setTimeout(()=>location.reload(),300);}
+    else window.open(BUILD.home,'_blank','noopener');
+  });
   $('saveFile').addEventListener('click',saveWorldFile);
   $('loadFile').addEventListener('click',()=>$('loadInput').click());
   $('loadInput').addEventListener('change',async e=>{
@@ -2399,6 +2433,7 @@ function start(data){
   if(data&&data.tiles){try{loaded=deserialize(data);}catch(err){}}
   S=loaded||loadLocal()||genWorld((Math.random()*1e9)|0);
   netDirty=true; indexVents(); S.player.ok=true; initWorldFiles();
+  showVersion(); setTimeout(checkForUpdate,5000); setInterval(checkForUpdate,5*60*1000);
   $('closeRes').addEventListener('click',()=>setResearch(false));
   $('research').addEventListener('mousedown',e=>{if(e.target.id==='research')setResearch(false);});
   if(S.won) {/* already finished; no banner on reload */}

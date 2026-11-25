@@ -10,9 +10,15 @@ You can also open `index.html` directly.
 
 ## Versions
 
-- The version number lives in two places: `BUILD.version` in `index.html` and `version.json`.
-- Bump both for every release, and commit with the version as the message, e.g. `v0.1.1`.
-- A copy of the game that finds a newer `version.json` on the live site tells the player an update is out.
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
+
+For each release:
+1. Add an entry at the top of `CHANGELOG` in `index.html`. The game takes its version number from it.
+2. Copy the version, date and notes into `version.json`.
+3. Add the same notes to `CHANGELOG.md`.
+4. Commit with the version as the message, e.g. `v0.2.0`.
+
+A copy of the game that finds a newer `version.json` on the live site tells the player an update is out, along with what it brings.
 
 ## Controls
 

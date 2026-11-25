@@ -111,7 +111,17 @@ button:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
 .rec.locked{opacity:.55}
 .small{color:var(--muted);font-size:11px}
 #danger{display:flex;gap:6px;align-items:center}
-.ver{font:400 10px var(--mono);color:var(--muted);letter-spacing:0;text-transform:none;margin-left:4px}
+.ver{font:400 10px var(--mono);color:var(--muted);letter-spacing:0;text-transform:none;margin-left:4px;background:none;border:0;padding:0}
+button.ver{cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
+button.ver:hover{color:var(--text)}
+#updateNotes{flex-basis:100%;margin:2px 0 0;padding-left:18px;color:var(--muted);font-size:12px}
+#news{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(5,6,8,.6);padding:16px}
+#news .card{width:min(560px,100%);max-height:min(560px,85vh);overflow:auto;padding:16px;box-sizing:border-box}
+#news .head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:6px}
+#news h3{font-size:15px;margin:12px 0 4px;display:flex;align-items:center;gap:8px}
+#news ul{margin:0;padding-left:18px}
+#news li{margin:3px 0;line-height:1.4}
+#news .newtag{font:600 10px var(--mono);background:var(--ember);color:#1b1206;border-radius:3px;padding:1px 5px}
 #update{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:15;display:flex;flex-wrap:wrap;align-items:center;gap:8px;max-width:calc(100vw - 32px);box-sizing:border-box}
 #update #updateGo{background:var(--ember);color:#1b1206;border:0;border-radius:3px;padding:4px 10px;font-weight:600;cursor:pointer}
 #worldFile{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:8px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
@@ -163,7 +173,7 @@ button:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
 </div>
 
 <div id="help" class="card">
-  <div class="top"><span class="eyebrow">Controls <span class="ver" id="verHelp"></span></span><button class="ghost" id="helpBtn">Hide</button></div>
+  <div class="top"><span class="eyebrow">Controls <button class="ver" id="verHelp" title="What’s new"></button></span><button class="ghost" id="helpBtn">Hide</button></div>
   <div class="rows" style="margin-top:6px">
     <div class="row"><span>Move · jump</span><kbd>A D · W / Space</kbd></div>
     <div class="row"><span>Mine</span><kbd>Left mouse</kbd></div>
@@ -192,14 +202,20 @@ button:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
 <div id="rot"></div>
 <div id="hotbar" role="toolbar" aria-label="Hotbar"></div>
 <div id="toasts"></div>
-<div id="update" class="card" hidden role="status"><span id="updateText"></span><button id="updateGo">Save and reload</button><button class="ghost" id="updateLater">Later</button></div>
+<div id="update" class="card" hidden role="status"><span id="updateText"></span><button id="updateGo">Save and reload</button><button class="ghost" id="updateLater">Later</button><ul id="updateNotes" hidden></ul></div>
+<div id="news" hidden>
+  <div class="card" role="dialog" aria-label="What's new">
+    <div class="head"><div class="eyebrow">What’s new</div><button class="ghost" id="closeNews">Close · Esc</button></div>
+    <div id="newsList"></div>
+  </div>
+</div>
 <div id="tip" hidden></div>
 
 <div id="pack" hidden>
   <div class="card" role="dialog" aria-label="Pack and crafting">
     <div class="head">
       <div><div class="eyebrow">Pack <span class="ver" id="verPack"></span></div><div class="small">Click an item to put it in the selected hotbar slot.</div></div>
-      <div id="danger"><button class="ghost" id="newWorld">New world</button><button class="ghost" id="closePack">Close · Tab</button></div>
+      <div id="danger"><button class="ghost" id="newsBtn">What’s new</button><button class="ghost" id="newWorld">New world</button><button class="ghost" id="closePack">Close · Tab</button></div>
     </div>
     <div id="worldFile">
       <span class="eyebrow">World file</span>
@@ -1919,7 +1935,7 @@ function drawPlayer(p){
 // ---------- HUD ----------
 const $=id=>document.getElementById(id);
 let invDirty=true, hudDirty=true, packOpen=false, resOpen=false, hudT=0, lastInvSig='';
-const uiOpen=()=>packOpen||resOpen;
+const uiOpen=()=>packOpen||resOpen||newsOpen;
 let lastResSig='';
 function buildHotbar(){
   const hb=$('hotbar'); hb.innerHTML='';
@@ -2123,7 +2139,29 @@ function showWin(){
 // ---------- version ----------
 // Bump BUILD (and version.json beside index.html, which the live site serves) with every release.
 // A copy that finds a newer version.json on the live site tells the player an update is out.
-const BUILD={version:'0.1.1',date:'2026-11-24',home:'https://jansensational.github.io/LodeForge/',updateUrl:'https://jansensational.github.io/LodeForge/version.json'};
+// The changelog, newest first. Each release adds an entry here, and its notes also go into version.json
+// (so older copies can show what the update brings) and CHANGELOG.md (for GitHub).
+const CHANGELOG=[
+  {v:'0.2.0',date:'2026-11-24',notes:[
+    'What’s new: this window. It opens once after each update, and the version number next to Controls (or the What’s new button in the pack) brings it back.',
+    'The update notice now lists what the new version brings.',
+  ]},
+  {v:'0.1.1',date:'2026-11-24',notes:[
+    'Save and reload on the update notice now always loads the new version, even while GitHub is still serving the old page.',
+  ]},
+  {v:'0.1.0',date:'2026-11-24',notes:[
+    'First numbered release, hosted on GitHub Pages.',
+    'Version number in the tab title, the Controls card and the pack, with a notice when a newer version is out.',
+    'World files: save your world to a file, load it back, or autosave straight to a file in Chrome or Edge.',
+    'Ice: water freezes below 0 °C, and the top of the world is permafrost with frozen lakes. Mine ice for water casks.',
+    'The Steam engine boils water: it needs a pool or water casks, takes a few seconds to raise steam, and vents hot steam.',
+    'Water boils into steam at a boiling point set by the pressure above it, and steam condenses back as it cools.',
+    'Temperature: heated gas expands and rises. Fires, candles and vents add heat; above 60 °C the air scorches. G cycles gas view, heat view and off.',
+    'Nitrogen, real partial pressures, CO₂ poisoning, toxic oxygen and crushing pressure.',
+    'Glowmoss planters, Gas monitors, catwalks and Rune airlocks for managing the air in your hold.',
+  ]},
+];
+const BUILD={version:CHANGELOG[0].v,date:CHANGELOG[0].date,home:'https://jansensational.github.io/LodeForge/',updateUrl:'https://jansensational.github.io/LodeForge/version.json'};
 const verNewer=(a,b)=>{const x=String(a).split('.').map(Number),y=String(b).split('.').map(Number);for(let i=0;i<3;i++){const p=x[i]||0,q=y[i]||0;if(p!==q)return p>q;}return false;};
 const onLiveSite=()=>location.href.startsWith(BUILD.home);
 let updateSeen=null;
@@ -2135,10 +2173,37 @@ async function checkForUpdate(){
     if(v&&typeof v.version==='string'&&verNewer(v.version,BUILD.version)){
       updateSeen=v.version;
       $('updateText').textContent='Lodeforge v'+v.version+' is out. You are playing v'+BUILD.version+'.';
+      const ul=$('updateNotes'); ul.replaceChildren();
+      for(const n of (Array.isArray(v.notes)?v.notes:[]).slice(0,4)){if(typeof n!=='string')continue;const li=document.createElement('li');li.textContent=n;ul.appendChild(li);}
+      ul.hidden=!ul.children.length;
       $('updateGo').textContent=onLiveSite()?'Save and reload':'Open the new version';
       $('update').hidden=false;
     }
   }catch(err){}
+}
+// "What's new": the whole changelog, newest first, with anything newer than the last version this browser saw marked new
+const SEEN_KEY='lodeforge-seen-version';
+let newsOpen=false;
+function fmtDate(s){return new Date(s+'T12:00:00').toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});}
+function setNews(open,since){
+  newsOpen=open; $('news').hidden=!open; if(!open) return;
+  setPack(false); setResearch(false);
+  const box=$('newsList'); box.replaceChildren();
+  for(const e of CHANGELOG){
+    const sec=document.createElement('section'), h=document.createElement('h3'), ul=document.createElement('ul');
+    h.textContent='v'+e.v+' · '+fmtDate(e.date);
+    if(since&&verNewer(e.v,since)){const tag=document.createElement('span');tag.className='newtag';tag.textContent='New';h.appendChild(tag);}
+    for(const n of e.notes){const li=document.createElement('li');li.textContent=n;ul.appendChild(li);}
+    sec.append(h,ul); box.appendChild(sec);
+  }
+  try{localStorage.setItem(SEEN_KEY,BUILD.version);}catch(err){}
+}
+// open it once after an update; a brand-new player just has it remembered as seen
+function newsOnStart(hadSave){
+  let seen=null; try{seen=localStorage.getItem(SEEN_KEY);}catch(err){}
+  if(seen===BUILD.version) return;
+  if(!hadSave&&!seen){try{localStorage.setItem(SEEN_KEY,BUILD.version);}catch(err){} return;}
+  setTimeout(()=>setNews(true,seen||'0.0.0'),800);
 }
 function showVersion(){
   document.title='Lodeforge v'+BUILD.version;
@@ -2271,7 +2336,8 @@ function onKey(e,down){
   keys.add(e.code);
   if(e.code==='Tab'||e.code==='KeyC'){setPack(!packOpen);return;}
   if(e.code==='KeyT'){setResearch(!resOpen);return;}
-  if(e.code==='Escape'){setPack(false);setResearch(false);$('win').hidden=true;return;}
+  if(e.code==='Escape'){setPack(false);setResearch(false);setNews(false);$('win').hidden=true;return;}
+  if(newsOpen) return;
   if(e.code==='KeyG'){gasView=(gasView+1)%3;$('legend').hidden=gasView!==1;$('heatLegend').hidden=gasView!==2;
     const reach=has('monitors')?'you see air near you and in rooms with a powered Gas monitor':'you can only sense air within 2 tiles. Research Gas monitors (T) to read whole rooms';
     toast(gasView===0?'Gas view off':gasView===1?'Gas view: '+reach:'Heat view (G again to turn off): '+reach);return;}
@@ -2313,6 +2379,10 @@ function bindEvents(){
     S=genWorld((Math.random()*1e9)|0);indexVents();setPack(false);invDirty=hudDirty=netDirty=true;save();toast('A new hold, freshly delved.',true);
   });
   $('updateLater').addEventListener('click',()=>{$('update').hidden=true;});
+  $('verHelp').addEventListener('click',()=>setNews(true));
+  $('newsBtn').addEventListener('click',()=>setNews(true));
+  $('closeNews').addEventListener('click',()=>setNews(false));
+  $('news').addEventListener('mousedown',e=>{if(e.target.id==='news')setNews(false);});
   $('updateGo').addEventListener('click',()=>{
     // GitHub Pages caches the page for up to 10 minutes, so load the new version's own address rather than reloading
     if(onLiveSite()){save();writeWorldFile();setTimeout(()=>{location.href=BUILD.home+'?v='+encodeURIComponent(updateSeen);},300);}
@@ -2432,7 +2502,9 @@ function start(data){
   try{if(localStorage.getItem('lodeforge-help')==='0'){$('help').classList.add('min');$('helpBtn').textContent='Show';}}catch(err){}
   let loaded=null;
   if(data&&data.tiles){try{loaded=deserialize(data);}catch(err){}}
-  S=loaded||loadLocal()||genWorld((Math.random()*1e9)|0);
+  const local=loaded?null:loadLocal();
+  S=loaded||local||genWorld((Math.random()*1e9)|0);
+  newsOnStart(!!(loaded||local));
   netDirty=true; indexVents(); S.player.ok=true; initWorldFiles();
   showVersion(); setTimeout(checkForUpdate,5000); setInterval(checkForUpdate,5*60*1000);
   $('closeRes').addEventListener('click',()=>setResearch(false));

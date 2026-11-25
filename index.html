@@ -1,0 +1,2415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body>
+<title>Lodeforge</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: full-bleed world canvas; HUD cards pinned to the corners, hotbar along the bottom edge.
+   Deliberately single-theme: a lamp-lit mine at dusk. */
+:root{
+  --ink:#0d1014;
+  --panel:rgba(15,18,23,.9);
+  --line:#2b323c;
+  --text:#ece5d6;
+  --muted:#9a9384;
+  --ember:#f2a03d;
+  --ember-dim:#7c5222;
+  --ok:#8bc994;
+  --bad:#e36b5d;
+  --display:'Pixelify Sans', ui-monospace, Consolas, monospace;
+  --mono:'JetBrains Mono', ui-monospace, Consolas, 'Courier New', monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{margin:0;background:var(--ink);color:var(--text);font:12px/1.45 var(--mono);overflow:hidden;user-select:none;-webkit-user-select:none}
+#game{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.eyebrow{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ember)}
+h2{font:600 20px/1.1 var(--display);margin:4px 0 8px;text-wrap:balance}
+button{font:inherit;color:inherit}
+button:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
+
+#goal{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));width:272px;max-width:calc(100vw - 24px);box-sizing:border-box}
+.need{display:grid;grid-template-columns:22px 1fr auto;gap:2px 8px;align-items:center;margin:4px 0}
+.need img{width:22px;height:22px;image-rendering:pixelated}
+.need .bar{grid-column:2 / 4;height:4px;background:#262b33;border-radius:2px;overflow:hidden}
+.need .bar i{display:block;height:100%;background:var(--ember)}
+.need .ct{font-variant-numeric:tabular-nums;color:var(--muted)}
+.need.done .bar i{background:var(--ok)}
+#hint{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);color:var(--text)}
+#hint b{color:var(--ember);font-weight:600}
+
+#help{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));width:250px;box-sizing:border-box}
+#help .row{display:flex;justify-content:space-between;gap:10px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+#help .row span:first-child{color:var(--muted)}
+#help kbd{font:600 11px var(--mono);color:var(--text)}
+#help .top{display:flex;justify-content:space-between;align-items:center}
+.ghost{background:none;border:1px solid var(--line);border-radius:4px;padding:2px 8px;cursor:pointer;color:var(--muted)}
+.ghost:hover{color:var(--text);border-color:var(--muted)}
+#help.min .rows{display:none}
+
+#hotbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:4px;padding:5px;background:var(--panel);border:1px solid var(--line);border-radius:6px;max-width:calc(100vw - 24px);box-sizing:border-box}
+.slot{position:relative;width:46px;height:46px;flex:0 1 46px;min-width:30px;background:#1b2028;border:2px solid #2b323c;border-radius:4px;cursor:pointer;padding:0;display:grid;place-items:center}
+.slot img{width:30px;height:30px;image-rendering:pixelated}
+.slot.sel{border-color:var(--ember);background:#2a2218}
+.slot.empty img{opacity:.3}
+.slot .n{position:absolute;right:3px;bottom:1px;font:600 11px var(--mono);font-variant-numeric:tabular-nums;text-shadow:0 1px 0 #000}
+.slot .k{position:absolute;left:3px;top:1px;font:10px var(--mono);color:var(--muted)}
+#rot{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(68px + env(safe-area-inset-bottom,0px));color:var(--muted);font-size:11px;text-shadow:0 1px 2px #000;white-space:nowrap}
+#rot b{color:var(--text)}
+
+#toasts{position:fixed;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(74px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:4px;pointer-events:none;max-width:340px}
+.toast{background:var(--panel);border-left:3px solid var(--ember);padding:5px 10px;border-radius:3px;animation:tin .2s ease-out}
+.toast.big{font:600 15px var(--display);border-left-color:var(--ok)}
+@keyframes tin{from{transform:translateY(6px);opacity:0}}
+
+#tip{position:fixed;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 9px;max-width:240px;font-size:11px;z-index:5}
+#tip .t{font:600 13px var(--display);color:var(--text);margin-bottom:2px}
+#tip .s{color:var(--ember)}
+#tip .m{color:var(--muted)}
+
+#resLine{margin-top:8px;padding-top:6px;border-top:1px dashed var(--line)}
+#research .card{grid-template-columns:1fr;width:min(820px,100%)}
+.techs{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.tech{background:#1a1f26;border:1px solid #262c35;border-radius:4px;padding:9px 10px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.tech.active{border-color:var(--ember);background:#231d15}
+.tech.done{opacity:.55}
+.tech .nm{font:600 15px var(--display)}
+.tech .ds{color:var(--muted);font-size:11px;flex:1}
+.tech .cost{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:11px;font-variant-numeric:tabular-nums}
+.tech .cost img{width:18px;height:18px;image-rendering:pixelated;vertical-align:middle;margin-right:2px}
+.tech .bar{height:4px;background:#262b33;border-radius:2px;overflow:hidden}
+.tech .bar i{display:block;height:100%;background:var(--ember)}
+.tech.done .bar i{background:var(--ok)}
+.tech button{background:var(--ember);color:#1b1206;border:0;border-radius:3px;padding:5px 10px;font-weight:600;cursor:pointer}
+.tech button:disabled{background:#2b313a;color:#8a877f;cursor:default}
+#research{position:fixed;inset:0;display:grid;place-items:center;background:rgba(5,6,8,.55);z-index:10;padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+#research .card{max-height:min(620px,90vh);display:grid;gap:12px;overflow:auto;padding:16px;box-sizing:border-box}
+#research .head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+#pack{position:fixed;inset:0;display:grid;place-items:center;background:rgba(5,6,8,.55);z-index:10;padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+#pack .card{width:min(760px,100%);max-height:min(560px,90vh);display:grid;grid-template-columns:1fr 1.2fr;gap:16px;overflow:auto;padding:16px;box-sizing:border-box}
+#pack .head{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+#pack h3{font:600 15px var(--display);margin:0 0 8px;color:var(--text)}
+#inv{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:4px;align-content:start}
+#inv .slot{width:auto;height:52px}
+.recipes{display:flex;flex-direction:column;gap:4px;min-width:0}
+.rec{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;padding:5px 6px;background:#1a1f26;border:1px solid #262c35;border-radius:4px}
+.rec img{width:28px;height:28px;image-rendering:pixelated}
+.rec .nm{font-weight:600}
+.rec .ing{color:var(--muted);font-size:11px}
+.rec .ing .lack{color:var(--bad)}
+.rec button{background:var(--ember);color:#1b1206;border:0;border-radius:3px;padding:5px 10px;font-weight:600;cursor:pointer}
+.rec button:disabled{background:#2b313a;color:#6b6a66;cursor:default}
+.rec.locked{opacity:.55}
+.small{color:var(--muted);font-size:11px}
+#danger{display:flex;gap:6px;align-items:center}
+#worldFile{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:8px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+#worldFile .eyebrow{margin-right:4px}
+#autoNote{flex-basis:100%}
+#danger .warn{background:var(--bad);color:#1a0705;border:0;border-radius:3px;padding:3px 8px;cursor:pointer;font-weight:600}
+
+#win{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(5,6,8,.6);padding:16px}
+#win .card{max-width:420px;text-align:center;padding:22px}
+#win h2{font-size:30px;color:var(--ember)}
+#win button{margin-top:12px;background:var(--ember);color:#1b1206;border:0;border-radius:4px;padding:8px 16px;font-weight:600;cursor:pointer}
+
+#vitals{position:fixed;right:max(12px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));width:230px;box-sizing:border-box;padding:8px 10px}
+.vrow{display:grid;grid-template-columns:54px 1fr;gap:8px;align-items:center;margin:3px 0}
+.vrow span{color:var(--muted)}
+.vrow .bar{height:6px;background:#262b33;border-radius:3px;overflow:hidden}
+.vrow .bar i{display:block;height:100%;width:100%;transition:width .2s}
+#brBar{background:#6fc3f0}
+#hpBar{background:var(--ok)}
+#vitals.low #brBar{background:var(--bad)}
+#airLine{margin-top:4px;font-variant-numeric:tabular-nums}
+#airLine .bad{color:var(--bad)}
+#rooms:not(:empty){margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+#rooms .rm{margin:3px 0}
+#rooms .rm b{color:var(--text);font-weight:600}
+#rooms .rm .m{color:var(--muted)}
+#legend,#heatLegend{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);display:flex;flex-wrap:wrap;gap:4px 10px}
+#legend i,#heatLegend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+#touchnote{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);max-width:300px;text-align:center;z-index:30}
+@media (max-width:1100px){#vitals{bottom:calc(74px + env(safe-area-inset-bottom,0px))}#toasts{bottom:calc(150px + env(safe-area-inset-bottom,0px))}}
+@media (max-width:760px){
+  #help{display:none}
+  #vitals{width:190px}
+  #goal{width:230px;font-size:11px}
+  #pack .card{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){.toast{animation:none}}
+</style>
+
+<canvas id="game" aria-label="Lodeforge game world"></canvas>
+
+<div id="goal" class="card" aria-live="polite">
+  <div class="eyebrow" id="goalStep">The Core · stage 1 of 3</div>
+  <h2 id="goalTitle">Light the Core</h2>
+  <div id="needs"></div>
+  <div class="small" id="goalUnlock"></div>
+  <div id="hint"></div>
+  <div id="resLine"></div>
+</div>
+
+<div id="help" class="card">
+  <div class="top"><span class="eyebrow">Controls</span><button class="ghost" id="helpBtn">Hide</button></div>
+  <div class="rows" style="margin-top:6px">
+    <div class="row"><span>Move · jump</span><kbd>A D · W / Space</kbd></div>
+    <div class="row"><span>Mine</span><kbd>Left mouse</kbd></div>
+    <div class="row"><span>Place</span><kbd>Right mouse</kbd></div>
+    <div class="row"><span>Select</span><kbd>1–9 · wheel</kbd></div>
+    <div class="row"><span>Rotate output</span><kbd>R</kbd></div>
+    <div class="row"><span>Take output</span><kbd>E</kbd></div>
+    <div class="row"><span>Insert · deliver</span><kbd>F</kbd></div>
+    <div class="row"><span>Recipe · pump gas</span><kbd>Q</kbd></div>
+    <div class="row"><span>Pack &amp; crafting</span><kbd>Tab / C</kbd></div>
+    <div class="row"><span>Research</span><kbd>T</kbd></div>
+    <div class="row"><span>Gas / heat view</span><kbd>G</kbd></div>
+    <div class="row"><span>Drop off catwalk</span><kbd>S</kbd></div>
+  </div>
+</div>
+
+<div id="vitals" class="card" aria-live="polite">
+  <div class="vrow"><span>Breath</span><div class="bar"><i id="brBar"></i></div></div>
+  <div class="vrow"><span>Health</span><div class="bar"><i id="hpBar"></i></div></div>
+  <div id="airLine" class="small"></div>
+  <div id="rooms" class="small"></div>
+  <div id="legend" class="small" hidden><span><i style="background:#7cc8f2"></i>Oxygen</span><span><i style="background:#4e5c6e"></i>Nitrogen</span><span><i style="background:#8f6aa8"></i>CO₂</span><span><i style="background:#b6d05a"></i>Methane</span><span><i style="background:#ece4ff"></i>Hydrogen</span><span><i style="background:#c8cdd7"></i>Steam</span><span><i style="background:#2a6ec8"></i>Water</span><span><i style="background:#111"></i>Vacuum</span></div>
+  <div id="heatLegend" class="small" hidden><span><i style="background:#aa8cff"></i>-20 °C</span><span><i style="background:#3c6ee6"></i>0 °C freezing</span><span><i style="background:#467864"></i>22 °C</span><span><i style="background:#dcaa3c"></i>40 °C</span><span><i style="background:#e64628"></i>60 °C scorching</span><span><i style="background:#fff0dc"></i>200 °C+</span></div>
+</div>
+
+<div id="rot"></div>
+<div id="hotbar" role="toolbar" aria-label="Hotbar"></div>
+<div id="toasts"></div>
+<div id="tip" hidden></div>
+
+<div id="pack" hidden>
+  <div class="card" role="dialog" aria-label="Pack and crafting">
+    <div class="head">
+      <div><div class="eyebrow">Pack</div><div class="small">Click an item to put it in the selected hotbar slot.</div></div>
+      <div id="danger"><button class="ghost" id="newWorld">New world</button><button class="ghost" id="closePack">Close · Tab</button></div>
+    </div>
+    <div id="worldFile">
+      <span class="eyebrow">World file</span>
+      <button class="ghost" id="saveFile" title="Download this world as a .json file">Save to file</button>
+      <button class="ghost" id="loadFile" title="Open a saved world. It replaces the world you are playing.">Load from file…</button>
+      <button class="ghost" id="autoFile" hidden title="Pick a file once; the game writes the world into it every 20 seconds">Autosave to a file…</button>
+      <button class="ghost" id="stopFile" hidden>Stop</button>
+      <input type="file" id="loadInput" accept=".json,application/json" hidden>
+      <span class="small" id="fileState"></span>
+      <div class="small" id="autoNote">Your browser also keeps its own save. Autosaving straight to a file works in Chrome or Edge when the game is opened at its own web address.</div>
+    </div>
+    <div><h3>Inventory</h3><div id="inv"></div></div>
+    <div class="recipes"><h3>Hand crafting</h3><div id="recipes" class="recipes"></div>
+      <p class="small">Shift-click to craft 5. Smelting needs a Smelter. Rune cores can only be made on a Clockwork bench.</p></div>
+  </div>
+</div>
+
+<div id="research" hidden>
+  <div class="card" role="dialog" aria-label="Research">
+    <div class="head">
+      <div><div class="eyebrow">Research</div><div class="small">Pick a topic, then feed powered Scriptoriums the packs it lists. Each unit takes 4 seconds per Scriptorium.</div></div>
+      <button class="ghost" id="closeRes">Close · T</button>
+    </div>
+    <div id="techs" class="techs"></div>
+  </div>
+</div>
+
+<div id="win" hidden>
+  <div class="card">
+    <div class="eyebrow">Stage 3 complete</div>
+    <h2>The forge is awake</h2>
+    <p id="winText">The Core is lit. Your factory keeps running if you want to keep building.</p>
+    <button id="winClose">Keep building</button>
+  </div>
+</div>
+
+<div id="touchnote" class="card" hidden>
+  <h2>Keyboard and mouse needed</h2>
+  <p class="small">Lodeforge is played with a keyboard and mouse. Open this page on a computer to play.</p>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ---------- world constants ----------
+const WW = 512, WH = 256;
+const AIR=0,DIRT=1,GRASS=2,STONE=3,COAL=4,COPPER=5,IRON=6,BEDROCK=7,LOG=8,LEAF=9,PLANK=10,BRICK=11,TORCH=12,
+  VENTC=13,VENTM=14,VENTO=15,STORM=16,AQUIFER=17,SALT=18,DOOR=19,DOORO=20,CATWALK=21,AIRLOCK=22,AIRLOCKO=23,ICE=24;
+const TP = [
+  {n:'Air',solid:false,hard:0,drop:null},
+  {n:'Dirt',solid:true,hard:.3,drop:'dirt'},
+  {n:'Glowmoss',solid:true,hard:.3,drop:'dirt'},
+  {n:'Stone',solid:true,hard:.75,drop:'stone'},
+  {n:'Coal seam',solid:true,hard:.85,drop:'coal',ore:true},
+  {n:'Copper vein',solid:true,hard:1.05,drop:'copper_ore',ore:true},
+  {n:'Iron vein',solid:true,hard:1.2,drop:'iron_ore',ore:true},
+  {n:'Bedrock',solid:true,hard:Infinity,drop:null},
+  {n:'Cave mushroom stalk',solid:false,hard:.45,drop:'wood'},
+  {n:'Mushroom cap',solid:false,hard:.08,drop:null},
+  {n:'Planks',solid:true,hard:.4,drop:'wood'},
+  {n:'Brick',solid:true,hard:.9,drop:'brick'},
+  {n:'Torch',solid:false,hard:.05,drop:'torch'},
+  {n:'Carbon vent',solid:true,hard:Infinity,drop:null,vent:'c'},
+  {n:'Methane vent',solid:true,hard:Infinity,drop:null,vent:'m'},
+  {n:'Air spring',solid:true,hard:Infinity,drop:null,vent:'o'},
+  {n:'Stormcrystal',solid:true,hard:Infinity,drop:null},
+  {n:'Aquifer rock',solid:true,hard:Infinity,drop:'water',ore:true},
+  {n:'Brightsalt vein',solid:true,hard:1.0,drop:'brightsalt',ore:true},
+  {n:'Stone door',solid:false,hard:.5,drop:'door',door:true},
+  {n:'Stone door (open)',solid:false,hard:.5,drop:'door',door:true},
+  {n:'Catwalk',solid:false,hard:.3,drop:'catwalk'},
+  {n:'Rune airlock',solid:false,hard:Infinity,drop:null},
+  {n:'Rune airlock (open)',solid:false,hard:Infinity,drop:null},
+  {n:'Ice',solid:true,hard:.45,drop:null},
+];
+// SOL: blocks gas and water. A closed door blocks gas but lets the dwarf walk through (it opens).
+const SOL = new Uint8Array(32); TP.forEach((t,i)=>SOL[i]=t.solid?1:0); SOL[DOOR]=1; SOL[AIRLOCK]=1;
+// ROCK: solids that hold the rock temperature. Ice is solid but keeps its own temperature, so it can melt.
+const ROCK = SOL.slice(); ROCK[ICE]=0;
+const keepT=t=>!SOL[t]||t===ICE;
+const IT = {
+  dirt:{n:'Dirt',place:DIRT}, stone:{n:'Stone',place:STONE}, coal:{n:'Coal'},
+  copper_ore:{n:'Copper ore'}, iron_ore:{n:'Iron ore'}, wood:{n:'Stalkwood',place:PLANK},
+  brick:{n:'Brick',place:BRICK}, iron_plate:{n:'Iron plate'}, copper_plate:{n:'Copper plate'},
+  gear:{n:'Gear'}, circuit:{n:'Rune circuit'}, cell:{n:'Rune core'}, torch:{n:'Torch',place:TORCH},
+  water:{n:'Water cask'}, brightsalt:{n:'Brightsalt'}, door:{n:'Stone door',place:DOOR}, catwalk:{n:'Catwalk',place:CATWALK},
+  belt:{n:'Belt',ent:'belt'}, lift:{n:'Lift',ent:'lift'}, drill:{n:'Burner drill',ent:'drill'},
+  furnace:{n:'Smelter',ent:'furnace'}, assembler:{n:'Clockwork bench',ent:'assembler'}, chest:{n:'Chest',ent:'chest'},
+  survey:{n:'Delver notes'}, schematic:{n:'Rune schematic'},
+  pole:{n:'Spark pylon',ent:'pole'}, motecoil:{n:'Mote coil',ent:'motecoil'}, generator:{n:'Steam engine',ent:'generator'},
+  lab:{n:'Scriptorium',ent:'lab'}, edrill:{n:'Spark drill',ent:'edrill'}, lamp:{n:'Mote lamp',ent:'lamp'},
+  candle:{n:'Air candle',ent:'candle'}, still:{n:'Galvanic still',ent:'still'},
+  pump:{n:'Gas pump',ent:'pump'}, airvent:{n:'Air vent',ent:'airvent'}, ventcap:{n:'Vent cap',ent:'ventcap'},
+  gasgen:{n:'Gas engine',ent:'gasgen'}, sensor:{n:'Echo sensor',ent:'sensor'}, planter:{n:'Glowmoss planter',ent:'planter'}, monitor:{n:'Gas monitor',ent:'monitor'}, airlock:{n:'Rune airlock',ent:'airlock'},
+  can_o2:{n:'Oxygen canister'}, can_co2:{n:'CO₂ canister'}, can_gas:{n:'Methane canister'}, can_h2:{n:'Hydrogen canister'}, can_n2:{n:'Nitrogen canister'},
+};
+const NODIR = new Set(['chest','pole','generator','motecoil','lab','lamp','candle','still','airvent','gasgen','sensor','planter','monitor','airlock']);
+const PRODUCER = {generator:90, gasgen:110, motecoil:20};
+const CONSUMER = {assembler:30, lab:40, edrill:25, lamp:2, pump:20, still:40, monitor:5, airlock:3};
+const POLE_LINK = 7, POLE_AREA = 3, RES_T = 4;
+// gases: o oxygen, c carbon dioxide, m methane, h hydrogen. 1.0 kg per tile is normal air.
+const GASES = ['o','n','c','m','h','s'];
+const GAS_N = {o:'Oxygen',n:'Nitrogen',c:'CO₂',m:'Methane',h:'Hydrogen',s:'Steam',w:'Water'};
+const PUMP_F = ['c','m','h','o','n','w'];
+const GAS_CAN = {o:'can_o2',n:'can_n2',c:'can_co2',m:'can_gas',h:'can_h2'};
+const CAN_GAS = {can_o2:'o',can_n2:'n',can_co2:'c',can_gas:'m',can_h2:'h'};
+const CAN_KG = 5;
+const VENT_N = {c:'Carbon vent',m:'Methane vent',o:'Air spring'};
+const TECHS = [
+  {id:'drafting', n:'Runic drafting', desc:'Rune schematics, the second research pack.', cost:10, packs:['survey'], req:[]},
+  {id:'splitting', n:'Water splitting', desc:'The Galvanic still: sparks split water casks into oxygen and hydrogen.', cost:10, packs:['survey'], req:[]},
+  {id:'edrill', n:'Spark drills', desc:'Drills that run on power, need no oxygen and mine twice as fast.', cost:15, packs:['survey'], req:[]},
+  {id:'lamps', n:'Mote lamps', desc:'Bottled motes: bright lamps that need no air.', cost:8, packs:['survey'], req:[]},
+  {id:'reach', n:'Long arms', desc:'+3 tiles of reach for mining and building.', cost:10, packs:['survey'], req:[]},
+  {id:'fast_belts', n:'Greased belts', desc:'Every belt and lift moves 60% faster.', cost:20, packs:['survey','schematic'], req:['drafting']},
+  {id:'smelting', n:'Bellows smelters', desc:'Smelters work 50% faster, get 6 smelts per coal and need a third less oxygen.', cost:20, packs:['survey','schematic'], req:['drafting']},
+  {id:'gaspower', n:'Gas engines', desc:'Burn methane or hydrogen canisters for 110 kW. Hydrogen burns clean: it only makes water.', cost:25, packs:['survey','schematic'], req:['drafting']},
+  {id:'monitors', n:'Gas monitors', desc:'Gas monitors read the air of a whole room: every gas, pressure and how much is breathable. Without them you only sense air within 2 tiles.', cost:8, packs:['survey'], req:[]},
+  {id:'airlocks', n:'Rune airlocks', desc:'Powered doors sealed by runes: the dwarf passes through, gas and water never do.', cost:10, packs:['survey'], req:[]},
+  {id:'sounding', n:'Deep sounding', desc:'Echo sensors reveal twice as far.', cost:12, packs:['survey'], req:[]},
+  {id:'mining', n:'Deep bits', desc:'All drills mine 40% faster.', cost:30, packs:['survey','schematic'], req:['edrill','drafting']},
+];
+const TECH = Object.fromEntries(TECHS.map(t=>[t.id,t]));
+const lockLabel = l => TECH[l] ? 'Research: '+TECH[l].n : 'Unlocked by the Great Forge';
+const ITEM_ORDER = Object.keys(IT);
+const SMELT = {iron_ore:'iron_plate', copper_ore:'copper_plate', stone:'brick'};
+const HAND = [
+  {out:'gear',n:1,in:{iron_plate:2}},
+  {out:'circuit',n:1,in:{iron_plate:1,copper_plate:2}},
+  {out:'belt',n:4,in:{iron_plate:1,gear:1}},
+  {out:'lift',n:2,in:{iron_plate:2,gear:1}},
+  {out:'drill',n:1,in:{iron_plate:4,gear:3,stone:4}},
+  {out:'furnace',n:1,in:{stone:6}},
+  {out:'chest',n:1,in:{wood:4}},
+  {out:'torch',n:4,in:{wood:1,coal:1}},
+  {out:'candle',n:2,in:{brightsalt:2,iron_plate:1}},
+  {out:'pole',n:2,in:{wood:1,copper_plate:1}},
+  {out:'motecoil',n:1,in:{copper_plate:4,iron_plate:2}},
+  {out:'assembler',n:1,in:{iron_plate:6,gear:4,circuit:3},lock:'assembler'},
+  {out:'generator',n:1,in:{iron_plate:8,gear:4,stone:6}},
+  {out:'lab',n:1,in:{iron_plate:6,gear:4,circuit:4}},
+  {out:'survey',n:1,in:{copper_plate:1,gear:1}},
+  {out:'ventcap',n:1,in:{iron_plate:6,gear:2,brick:4}},
+  {out:'pump',n:1,in:{iron_plate:4,gear:2,circuit:2}},
+  {out:'airvent',n:1,in:{iron_plate:3,gear:1}},
+  {out:'sensor',n:1,in:{copper_plate:3,gear:1,stone:2}},
+  {out:'planter',n:1,in:{brick:3,dirt:4,wood:2}},
+  {out:'door',n:2,in:{wood:2,stone:2}},
+  {out:'catwalk',n:4,in:{iron_plate:1,wood:1}},
+  {out:'monitor',n:1,in:{copper_plate:2,circuit:1,iron_plate:1},lock:'monitors'},
+  {out:'airlock',n:1,in:{iron_plate:3,circuit:1,brick:2},lock:'airlocks'},
+  {out:'still',n:1,in:{iron_plate:6,copper_plate:4,circuit:3},lock:'splitting'},
+  {out:'schematic',n:1,in:{circuit:1,brick:2,iron_plate:1},lock:'drafting'},
+  {out:'edrill',n:1,in:{iron_plate:6,gear:4,circuit:3},lock:'edrill'},
+  {out:'lamp',n:2,in:{iron_plate:1,circuit:1},lock:'lamps'},
+  {out:'gasgen',n:1,in:{iron_plate:8,gear:4,circuit:4},lock:'gaspower'},
+];
+const ASM = [
+  {out:'gear',n:1,in:{iron_plate:2},t:1.4},
+  {out:'circuit',n:1,in:{iron_plate:1,copper_plate:2},t:2},
+  {out:'belt',n:4,in:{iron_plate:1,gear:1},t:1.5},
+  {out:'cell',n:1,in:{circuit:2,gear:2,brick:2},t:5,lock:'cell'},
+  {out:'survey',n:1,in:{copper_plate:1,gear:1},t:3},
+  {out:'schematic',n:1,in:{circuit:1,brick:2,iron_plate:1},t:4,lock:'drafting'},
+];
+const GOALS = [
+  {title:'Kindle the Great Forge', need:{iron_plate:25,copper_plate:25}, unlock:'assembler', text:'Unlocks the Clockwork bench.'},
+  {title:'Teach it motion', need:{gear:40,circuit:25}, unlock:'cell', text:'Unlocks Rune cores on the Clockwork bench.'},
+  {title:'Wake the Deep Forge', need:{cell:12}, unlock:null, text:'Finishes the Lodeforge.'},
+];
+const GAP=.34, DRILL_T=1.6, SMELT_T=2.0, REACH=7.5, GRAV=42, JUMP=14.2, MOVE=6.2;
+
+// ---------- noise ----------
+function hash(x,y,s){let h=(Math.imul(x|0,374761393)+Math.imul(y|0,668265263)+Math.imul(s|0,982451653))|0;h=Math.imul(h^(h>>>13),1274126177);h^=h>>>16;return (h>>>0)/4294967296;}
+function vnoise(x,y,s){const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;const u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);const a=hash(ix,iy,s),b=hash(ix+1,iy,s),c=hash(ix,iy+1,s),d=hash(ix+1,iy+1,s);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;}
+function fbm(x,y,s,o){let t=0,a=1,n=0,f=1;for(let i=0;i<o;i++){t+=vnoise(x*f,y*f,s+i*17)*a;n+=a;a*=.5;f*=2;}return t/n;}
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const mod=(a,n)=>((a%n)+n)%n;
+
+// ---------- world generation ----------
+// Everything is underground: a sealed rock world with bedrock on every side. The dwarf starts in
+// the Forge Hall, a carved cavern with ore, a stormcrystal outcrop, a pool and a carbon vent.
+const VENT_BASE = {c:{rate:.25,on:40,off:70}, m:{rate:.4,on:50,off:60}, o:{rate:.25,on:35,off:80}};
+function makeVent(x,y,k,mul,phase){const b=VENT_BASE[k];return {x,y,k,rate:+(b.rate*mul).toFixed(2),on:Math.round(b.on*mul),off:Math.round(b.off*(2-mul)),t:phase,act:false};}
+function genWorld(seed){
+  const N=WW*WH, tiles=new Uint8Array(N), ore=new Uint8Array(N);
+  const go=new Float32Array(N), gc=new Float32Array(N), gm=new Float32Array(N), gh=new Float32Array(N), gn=new Float32Array(N), gs=new Float32Array(N), wa=new Float32Array(N), ic=new Float32Array(N), seen=new Uint8Array(N), tk=rockField();
+  const SX=WW>>1, FY=118, I=(x,y)=>y*WW+x;
+  for(let y=0;y<WH;y++)for(let x=0;x<WW;x++){
+    let t=fbm(x/22,y/22,seed+5,3)>.64?DIRT:STONE;
+    const worm=Math.abs(fbm(x/30,y/16,seed+21,3)-.5), blob=fbm(x/38,y/26,seed+33,3);
+    if(worm<.03||blob>.68) t=AIR;
+    if(t===STONE){
+      if(fbm(x/7,y/7,seed+41,2)>.74) t=COAL;
+      else if(fbm(x/8,y/8,seed+42,2)>.75) t=COPPER;
+      else if(fbm(x/8,y/8,seed+43,2)>.75) t=IRON;
+      else if(fbm(x/9,y/9,seed+44,2)>.78) t=SALT;
+      else if(fbm(x/10,y/10,seed+45,2)>.8) t=AQUIFER;
+      else if(fbm(x/6,y/6,seed+46,2)>.82) t=STORM;
+    }
+    if(x<2||y<2||x>=WW-2||y>=WH-2||(y>=WH-5&&hash(x,y,seed+9)<.5)||(y<5&&hash(x,y,seed+8)<.5)||(x<5&&hash(x,y,seed+10)<.5)||(x>=WW-5&&hash(x,y,seed+11)<.5)) t=BEDROCK;
+    tiles[I(x,y)]=t;
+  }
+  const inb=(x,y)=>x>1&&y>1&&x<WW-2&&y<WH-2;
+  const carve=(x,y)=>{if(inb(x,y))tiles[I(x,y)]=AIR;};
+  const fill=(x,y,t)=>{if(inb(x,y))tiles[I(x,y)]=t;};
+  // the starter areas sit inside a shell of solid rock, so their air is a finite store
+  const shell=(x0,x1,y0,y1)=>{for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)fill(x,y,STONE);};
+  shell(SX-44,SX+44,FY-16,FY+4); shell(SX+40,SX+96,FY-11,FY+3); shell(SX-103,SX-40,FY-6,FY+23);
+  // the Forge Hall
+  for(let dx=-40;dx<=40;dx++){
+    const x=SX+dx, h=Math.round(9*Math.sqrt(Math.max(0,1-(dx/42)**2)))+3;
+    for(let y=FY-h;y<FY;y++) carve(x,y);
+    for(let y=FY;y<FY+4;y++) fill(x,y,STONE);
+  }
+  const patch=(x0,x1,t,d)=>{for(let x=x0;x<=x1;x++)for(let y=FY;y<FY+d;y++)fill(x,y,t);};
+  patch(SX-30,SX-27,SALT,3); patch(SX-22,SX-15,COAL,4); patch(SX-11,SX-9,AQUIFER,2); patch(SX-5,SX-3,STORM,2);
+  patch(SX+10,SX+16,IRON,4); patch(SX+21,SX+27,COPPER,4);
+  for(let x=SX+31;x<=SX+38;x++)for(let y=FY;y<FY+3;y++){carve(x,y);wa[I(x,y)]=1;}
+  for(let x=SX+30;x<=SX+39;x++) fill(x,FY+3,STONE);
+  // east tunnel to the methane cave
+  for(let x=SX+41;x<=SX+70;x++){for(let y=FY-3;y<FY;y++)carve(x,y);fill(x,FY,STONE);fill(x,FY+1,STONE);}
+  for(let x=SX+70;x<=SX+92;x++){const h=Math.round(6*Math.sqrt(Math.max(0,1-((x-SX-81)/12)**2)))+2;for(let y=FY-h;y<FY;y++)carve(x,y);fill(x,FY,STONE);fill(x,FY+1,STONE);}
+  // west stairs down to the air spring
+  for(let k=0;k<40;k++){const x=SX-41-k, fy=FY+(k>>1);for(let y=fy-3;y<fy;y++)carve(x,y);fill(x,fy,STONE);fill(x,fy+1,STONE);}
+  for(let x=SX-99;x<=SX-81;x++){for(let y=FY+13;y<FY+20;y++)carve(x,y);fill(x,FY+20,STONE);fill(x,FY+21,STONE);}
+  // ore richness
+  for(let i=0;i<N;i++) if(TP[tiles[i]].ore) ore[i]=60+Math.floor(hash(i,7,seed)*60);
+  for(let x=SX-30;x<=SX+27;x++)for(let y=FY;y<FY+4;y++){const i=I(x,y);if(TP[tiles[i]].ore)ore[i]=200;}
+  // glowmoss on cave floors, mushrooms
+  const grow=(x,sy,h)=>{for(let k=1;k<=h;k++)tiles[I(x,sy-k)]=LOG;const cy=sy-h-1;
+    for(let dy=-2;dy<=1;dy++)for(let dx=-2;dx<=2;dx++){if(dx*dx+dy*dy*1.6>5)continue;const i=I(x+dx,cy+dy);if(tiles[i]===AIR)tiles[i]=LEAF;}tiles[I(x,sy-h)]=LOG;};
+  let lastM=-10;
+  for(let x=6;x<WW-6;x++)for(let y=8;y<WH-6;y++){
+    const t=tiles[I(x,y)]; if(!(t===STONE||t===DIRT)||tiles[I(x,y-1)]!==AIR) continue;
+    const far=Math.abs(x-SX)>45||Math.abs(y-FY)>16;
+    if(far&&fbm(x/12,y/12,seed+70,2)>.55) tiles[I(x,y)]=GRASS;
+    if(far&&x-lastM>=5&&hash(x,y,seed+50)<.06){
+      let room=true;for(let k=1;k<=8;k++)if(tiles[I(x,y-k)]!==AIR){room=false;break;}
+      if(room){lastM=x;grow(x,y,3+Math.floor(hash(x,y,seed+51)*3));}
+    }
+  }
+  grow(SX-7,FY,4); grow(SX+7,FY,4);
+  for(const dx of [-32,-14,14,32]) tiles[I(SX+dx,FY-4)]=TORCH;
+  // natural vents
+  const vents=[makeVent(SX-36,FY,'c',.7,10), makeVent(SX+82,FY,'m',1,30), makeVent(SX-90,FY+20,'o',1.1,40)];
+  for(let k=0;k<6000&&vents.length<44;k++){
+    const x=6+Math.floor(hash(k,1,seed+80)*(WW-12)), y=8+Math.floor(hash(k,2,seed+80)*(WH-16)), t=tiles[I(x,y)];
+    if(!(t===STONE||t===DIRT||t===GRASS)||tiles[I(x,y-1)]!==AIR||tiles[I(x,y-2)]!==AIR) continue;
+    if(Math.abs(x-SX)<55&&Math.abs(y-FY)<30) continue;
+    if(vents.some(v=>Math.abs(v.x-x)<12&&Math.abs(v.y-y)<12)) continue;
+    const r=hash(k,3,seed+80), kind=r<.4?'c':r<.8?'m':'o';
+    vents.push(makeVent(x,y,kind,.7+hash(k,4,seed+80)*.6,Math.floor(hash(k,5,seed+80)*60)));
+  }
+  for(const v of vents) tiles[I(v.x,v.y)]=kind2tile(v.k);
+  // starting air: breathable near the top and middle, heavy CO2 near the bottom, methane pockets
+  for(let y=0;y<WH;y++)for(let x=0;x<WW;x++){
+    const i=I(x,y); if(SOL[tiles[i]]||wa[i]>0) continue;
+    if(y>175){go[i]=.1;gc[i]=.35;gn[i]=.6;} else {go[i]=.21;gn[i]=.79;}
+    if(fbm(x/40,y/40,seed+77,2)>.67){gm[i]=.9;go[i]=.03;gn[i]=.1;}
+    if(fbm(x/26,y/26,seed+61,2)>.69&&(x<SX-106||x>SX+99||y<FY-19||y>FY+26)) {wa[i]=1;go[i]=gc[i]=gm[i]=gn[i]=0;}
+    if(x>=SX-100&&x<=SX+70&&y>=FY-20&&y<=FY+25){go[i]=.21;gn[i]=.79;gc[i]=gm[i]=0;}
+    if(x>SX+70&&x<=SX+93&&y>=FY-10&&y<=FY){gm[i]=1;go[i]=.02;gn[i]=.1;gc[i]=0;}
+    // warmer rock holds thinner gas at the same pressure (P ∝ mass × absolute temperature)
+    const f=293/(tk[i]+273); go[i]*=f; gc[i]*=f; gm[i]*=f; gn[i]*=f;
+  }
+  for(let k=0;k<160;k++) waterStep(tiles,wa,k&1);
+  // space the lakes drained out of while settling gets ordinary air rather than staying a vacuum
+  for(let i=0;i<N;i++) if(!SOL[tiles[i]]&&wa[i]<.9&&go[i]+gc[i]+gm[i]+gn[i]<.05){
+    const f=293/(tk[i]+273), deep=i/WW>175; go[i]=(deep?.1:.21)*f; gn[i]=(deep?.6:.79)*f; gc[i]=deep?.35*f:0;
+  }
+  // the permafrost near the top of the world: water there starts frozen
+  for(let i=0;i<N;i++) if(wa[i]>0&&tk[i]<0&&!SOL[tiles[i]]){
+    ic[i]=wa[i]; wa[i]=0;
+    if(ic[i]>=.9){tiles[i]=ICE;go[i]=gc[i]=gm[i]=gn[i]=0;}
+  }
+  const ents=new Map();
+  const core={type:'core',x:SX,y:FY-1,dir:1};
+  ents.set(core.y*WW+core.x,core);
+  return {
+    v:2, seed, tiles, ore, go, gc, gm, gh, gn, gs, wa, ic, tk, seen, vents, ents, time:0, core:{x:SX,y:FY-1},
+    player:{x:SX+2.15,y:FY-1.75,vx:0,vy:0,w:.7,h:1.7,face:1,ground:false,breath:1,hp:1},
+    inv:{iron_plate:12,coal:12,wood:8,stone:6,planter:1,drill:2,furnace:1,belt:24,lift:4,torch:12,chest:1,motecoil:2,pole:4,candle:4,sensor:1},
+    hotbar:['drill','furnace','belt','lift','chest','motecoil','pole','candle','sensor'],
+    sel:0, rot:1, lrot:-1, goal:0, delivered:{}, unlocked:new Set(), won:false,
+    research:{active:null,prog:{}},
+  };
+}
+function kind2tile(k){return k==='c'?VENTC:k==='m'?VENTM:VENTO;}
+
+// ---------- state ----------
+let S=null;
+const entAt=(x,y)=>(x<0||y<0||x>=WW||y>=WH)?undefined:S.ents.get(y*WW+x);
+const tileAt=(x,y)=>(x<0||y<0||x>=WW||y>=WH)?BEDROCK:S.tiles[y*WW+x];
+const solidAt=(x,y)=>TP[tileAt(x,y)].solid;
+function addInv(id,n){if(!id||n<=0)return;S.inv[id]=(S.inv[id]||0)+n;invDirty=true;}
+function takeInv(id,n){S.inv[id]=(S.inv[id]||0)-n;if(S.inv[id]<=0)delete S.inv[id];invDirty=true;}
+const have=id=>S.inv[id]||0;
+const has=id=>S.unlocked.has(id);
+let ventMap=new Map();
+function indexVents(){ventMap=new Map(S.vents.map(v=>[v.y*WW+v.x,v]));}
+
+// ---------- water ----------
+// Cellular liquid: falls first, then spreads sideways. Water is never created or destroyed here.
+// Flowing water carries its temperature into the tile it moves to (tk is optional during world generation).
+// Ice (ic) in a tile takes up room the water cannot flow into. An ice tile keeps its meltwater until it thaws open.
+function waterStep(tl,wa,flip,tk,ic){
+  const mv=tk?(j,f,ti)=>{const cj=wa[j]*CW+CAPW;tk[j]=(cj*tk[j]+f*CW*ti)/(cj+f*CW);}:null;
+  const I0=ic||null;
+  for(let y=WH-3;y>=2;y--){
+    const ltr=((y&1)^flip)===1, row=y*WW;
+    for(let k=2;k<WW-2;k++){
+      const i=row+(ltr?k:WW-1-k); let w=wa[i]; if(w<=0) continue;
+      if(SOL[tl[i]]){if(tl[i]!==ICE)wa[i]=0;continue;}
+      const b=i+WW, bs=SOL[tl[b]], ti=tk?tk[i]:0, room=1-wa[b]-(I0?I0[b]:0);
+      if(!bs&&room>0){const f=Math.min(w,room);if(mv)mv(b,f,ti);wa[b]+=f;w-=f;}
+      if(w>.02){ // thin films cling where they are (no loss), so slow drips pool up
+        const l=i-1,r=i+1;
+        if(!SOL[tl[l]]){const f=Math.min((w-wa[l])*.3,1-wa[l]-(I0?I0[l]:0));if(f>.002){if(mv)mv(l,f,ti);wa[l]+=f;w-=f;}}
+        if(!SOL[tl[r]]){const f=Math.min((w-wa[r])*.3,1-wa[r]-(I0?I0[r]:0));if(f>.002){if(mv)mv(r,f,ti);wa[r]+=f;w-=f;}}
+      }
+      wa[i]=w;
+    }
+  }
+}
+
+// ---------- gas ----------
+// Each open tile holds kg of five gases; 1 kg per tile is about 1 bar. Normal air is 0.21 bar oxygen and
+// 0.79 bar nitrogen, an inert gas that nothing uses but that fills space and carries pressure.
+// Pressure differences push mixed gas between neighbours, each gas also diffuses on its own, and
+// buoyancy swaps heavy gas down past lighter gas: hydrogen < methane < nitrogen < oxygen < CO2.
+// Tiles full of water hold no gas.
+// Temperature: every tile has one (°C). Pressure is mass × absolute temperature (ideal gas), so heated gas
+// expands: it pushes out of hot tiles until pressures match, leaving hot air thinner than cool air. Thinner
+// hot air is lighter, so it rises past cooler air (convection). Flowing gas carries its heat, neighbouring
+// gas evens out by conduction, and bare rock pulls gas back toward the rock's own temperature, which
+// rises with depth. Fires, candles and vents add heat.
+const T0=293, CAPW=.3, T_HOT=60;
+// Rock temperature with depth: permafrost near the top of the world (about -14 °C at the very top, 0 °C at
+// depth 25), mild by depth 50, then slowly warmer toward the bottom (about 22 °C in the Forge Hall, 35 °C deep down).
+const rockT=y=>y<50?-15+y*.6:15+(y-50)*.1;
+function rockField(){const f=new Float32Array(WW*WH);for(let y=0;y<WH;y++)f.fill(rockT(y),y*WW,(y+1)*WW);return f;}
+// ---------- water and steam ----------
+// Water shares its tile's temperature and soaks up far more heat than gas (CW per unit of water).
+// Boiling point depends on the pressure above the water: 100 °C at 1 atm (1.013 bar, sea level), about
+// 120 °C at 2 bar, 81 °C at 0.5 bar, and room temperature in a near-vacuum (Clausius–Clapeyron with
+// water's heat of vaporisation). Boiling turns LAT of heat per unit of water into SPW kg of steam. Steam
+// condenses back to water, giving that heat back, wherever its partial pressure is above the saturation
+// pressure for the tile's temperature (about 0.03 bar at 25 °C, 1 bar at 100 °C).
+const CW=4, LAT=1200, SPW=4.5, P_ATM=1.013, LV=4890;
+const boilT=P=>P<=1e-4?-100:1/(1/373.15-Math.log(P/P_ATM)/LV)-273.15;
+const psat=T=>P_ATM*Math.exp(LV*(1/373.15-1/(T+273.15)));
+// Freezing: water below 0 °C turns to ice, releasing LATF of heat per unit (water's heat of melting is about
+// a seventh of its heat of boiling), so freezing water holds at 0 °C until it is all ice; melting takes that heat
+// back. Ice holds about half as much heat per degree as water (CI). A tile that is 90% ice becomes a solid Ice
+// block: it stops gas, water and the dwarf, and it melts open again below 80%.
+const LATF=180, CI=2;
+const heatCap=i=>S.go[i]+S.gc[i]+S.gm[i]+S.gh[i]+S.gn[i]+S.gs[i]+CAPW+S.wa[i]*CW+S.ic[i]*CI;
+// nothing freezes solid around the dwarf or a machine
+function occupied(i){
+  if(S.ents.has(i)) return true;
+  const p=S.player, x=i%WW, y=(i/WW)|0;
+  return x+1>p.x&&x<p.x+p.w&&y+1>p.y&&y<p.y+p.h;
+}
+let gasFlip=0;
+function gasStep(){
+  const o=S.go,c=S.gc,m=S.gm,h=S.gh,n=S.gn,st=S.gs,wa=S.wa,ic=S.ic,tl=S.tiles,tk=S.tk,K=.18,KD=.04,KB=.1,KT=.015,KTW=.08,KC=.35,KR=.01;
+  gasFlip^=1;
+  const cap=i=>o[i]+c[i]+m[i]+h[i]+n[i]+st[i]+CAPW+wa[i]*CW+ic[i]*CI;
+  const mix=(a,b)=>{
+    const ma=o[a]+c[a]+m[a]+h[a]+n[a]+st[a], mb=o[b]+c[b]+m[b]+h[b]+n[b]+st[b];
+    if(ma+mb<1e-5) return;
+    const fa=(tk[a]+273)/T0, fb=(tk[b]+273)/T0, f=(ma*fa-mb*fb)*K;
+    if(f>0){const d=Math.min(f/fa,ma*.5),r=d/ma,d0=o[a]*r,d1=c[a]*r,d2=m[a]*r,d3=h[a]*r,d4=n[a]*r,d5=st[a]*r,cb=cap(b);o[a]-=d0;c[a]-=d1;m[a]-=d2;h[a]-=d3;n[a]-=d4;st[a]-=d5;o[b]+=d0;c[b]+=d1;m[b]+=d2;h[b]+=d3;n[b]+=d4;st[b]+=d5;tk[b]=(cb*tk[b]+d*tk[a])/(cb+d);}
+    else if(f<0){const d=Math.min(-f/fb,mb*.5),r=d/mb,d0=o[b]*r,d1=c[b]*r,d2=m[b]*r,d3=h[b]*r,d4=n[b]*r,d5=st[b]*r,ca=cap(a);o[b]-=d0;c[b]-=d1;m[b]-=d2;h[b]-=d3;n[b]-=d4;st[b]-=d5;o[a]+=d0;c[a]+=d1;m[a]+=d2;h[a]+=d3;n[a]+=d4;st[a]+=d5;tk[a]=(ca*tk[a]+d*tk[b])/(ca+d);}
+    let t=(o[a]-o[b])*KD;o[a]-=t;o[b]+=t; t=(c[a]-c[b])*KD;c[a]-=t;c[b]+=t;
+    t=(m[a]-m[b])*KD;m[a]-=t;m[b]+=t; t=(h[a]-h[b])*KD;h[a]-=t;h[b]+=t; t=(n[a]-n[b])*KD;n[a]-=t;n[b]+=t; t=(st[a]-st[b])*KD;st[a]-=t;st[b]+=t;
+  };
+  // conduction between any two open tiles; water conducts (and stirs) much better than gas
+  const cond=(a,b)=>{const d=tk[a]-tk[b]; if(d<.12&&d>-.12) return; const ca=cap(a), cb=cap(b), k=(wa[a]+ic[a]>.3||wa[b]+ic[b]>.3)?KTW:KT, q=(tk[a]-tk[b])*k*Math.min(ca,cb); tk[a]-=q/ca; tk[b]+=q/cb;};
+  // convection: when the lower tile is hotter, part of each tile's gas trades places with the other's
+  const conv=(a,b)=>{
+    const dT=tk[b]-tk[a]; if(dT<.5) return;
+    const s=KC*Math.min(1,dT/6), ma=o[a]+c[a]+m[a]+h[a]+n[a]+st[a], mb=o[b]+c[b]+m[b]+h[b]+n[b]+st[b], sa=ma*s, sb=mb*s;
+    const ka=CAPW+wa[a]*CW+ic[a]*CI, kb=CAPW+wa[b]*CW+ic[b]*CI;
+    let x;
+    x=(o[b]-o[a])*s;o[a]+=x;o[b]-=x; x=(c[b]-c[a])*s;c[a]+=x;c[b]-=x; x=(m[b]-m[a])*s;m[a]+=x;m[b]-=x;
+    x=(h[b]-h[a])*s;h[a]+=x;h[b]-=x; x=(n[b]-n[a])*s;n[a]+=x;n[b]-=x; x=(st[b]-st[a])*s;st[a]+=x;st[b]-=x;
+    const ta=tk[a], tb=tk[b];
+    tk[a]=((ma-sa+ka)*ta+sb*tb)/(ma-sa+sb+ka); tk[b]=((mb-sb+kb)*tb+sa*ta)/(mb-sb+sa+kb);
+  };
+  // swap strength scales with how different the two gases' weights are (molar mass: CO2 44, O2 32,
+  // N2 28, steam 18, CH4 16, H2 2), so oxygen and nitrogen barely separate while CO2 and hydrogen clearly do.
+  const sw=(X,Y,a,b,w)=>{const s=KB*w*Math.min(X[a],Y[b]);if(s>0){X[a]-=s;X[b]+=s;Y[b]-=s;Y[a]+=s;}};
+  for(let y=2;y<WH-2;y++){
+    const row=y*WW, rt=rockT(y);
+    for(let k=2;k<WW-2;k++){
+      const a=row+(gasFlip?k:WW-1-k);
+      const ta=tl[a];
+      if(ROCK[ta]) continue;
+      const ice=ta===ICE;
+      if(ice){
+        // a solid ice block: trades heat with rock and its open or icy neighbours, and melts above 0 °C
+        const ns=ROCK[tl[a-1]]+ROCK[tl[a+1]]+ROCK[tl[a-WW]]+ROCK[tl[a+WW]];
+        if(ns){const d=rt-tk[a]; if(d>.05||d<-.05) tk[a]+=d*Math.min(.5,KR*ns/cap(a));}
+        const s=gasFlip?a+1:a-1, b=a+WW;
+        if(!ROCK[tl[s]]) cond(a,s);
+        if(!ROCK[tl[b]]) cond(a,b);
+        if(tk[a]>0){const ca=cap(a),u=Math.min(ic[a],tk[a]*ca/LATF,.02);ic[a]-=u;wa[a]+=u;tk[a]-=u*LATF/ca;}
+        else if(tk[a]<0&&wa[a]>0){const ca=cap(a),u=Math.min(wa[a],-tk[a]*ca/LATF,.02);wa[a]-=u;ic[a]+=u;tk[a]+=u*LATF/ca;}
+        if(ic[a]<.8) tl[a]=AIR; // thawed open: its meltwater is free to flow
+        continue;
+      }
+      const wet=wa[a]>.9;
+      // gas caught in a flooded tile bubbles up into the tile above (through water too, one tile per step)
+      if(wet){const ma=o[a]+c[a]+m[a]+h[a]+n[a]+st[a], u=a-WW;
+        if(ma>1e-4&&!SOL[tl[u]]){const cu=cap(u);tk[u]=(cu*tk[u]+ma*tk[a])/(cu+ma);o[u]+=o[a];c[u]+=c[a];m[u]+=m[a];h[u]+=h[a];n[u]+=n[a];st[u]+=st[a];o[a]=c[a]=m[a]=h[a]=n[a]=st[a]=0;}}
+      // bare rock around the tile pulls it toward the rock temperature
+      const ns=ROCK[tl[a-1]]+ROCK[tl[a+1]]+ROCK[tl[a-WW]]+ROCK[tl[a+WW]];
+      if(ns){const d=rt-tk[a]; if(d>.05||d<-.05) tk[a]+=d*Math.min(.5,KR*ns/cap(a));}
+      const s=gasFlip?a+1:a-1, b=a+WW;
+      if(!ROCK[tl[s]]){ if(!wet&&!SOL[tl[s]]&&wa[s]<=.9) mix(a,s); cond(a,s); }
+      if(!ROCK[tl[b]]){
+        const gb=!SOL[tl[b]]&&wa[b]<=.9;
+        if(!wet&&gb){
+          mix(a,b); conv(a,b);
+          // only pairs whose gases are actually present (most tiles hold no steam, methane or hydrogen)
+          const hs=st[a]+st[b]>1e-5, hm=m[a]+m[b]>1e-5, hh=h[a]+h[b]>1e-5;
+          if(c[a]>1e-5){sw(c,o,a,b,.27);sw(c,n,a,b,.36);if(hs)sw(c,st,a,b,.59);if(hm)sw(c,m,a,b,.64);if(hh)sw(c,h,a,b,.95);}
+          sw(o,n,a,b,.02);
+          if(hs){sw(o,st,a,b,.44);sw(n,st,a,b,.36);if(hm)sw(st,m,a,b,.11);if(hh)sw(st,h,a,b,.89);}
+          if(hm){sw(o,m,a,b,.5);sw(n,m,a,b,.43);if(hh)sw(m,h,a,b,.88);}
+          if(hh){sw(o,h,a,b,.94);sw(n,h,a,b,.93);}
+        }
+        cond(a,b);
+      }
+      // boiling: surface water at or above the boiling point for the pressure over it turns to steam,
+      // using up heat, so the water holds at its boiling point while it boils
+      const w=wa[a];
+      if(w>.001){
+        let g=-1;
+        if(!wet) g=a; else if(!SOL[tl[a-WW]]&&wa[a-WW]<=.9) g=a-WW;
+        if(g>=0){
+          const P=(o[g]+c[g]+m[g]+h[g]+n[g]+st[g])*(tk[g]+273)/T0, Tb=boilT(P);
+          if(tk[a]>Tb){
+            const ca=cap(a), u=Math.min(w,(tk[a]-Tb)*ca/LAT,.02);
+            wa[a]-=u; tk[a]-=u*LAT/ca;
+            const sm=u*SPW, cg=cap(g); st[g]+=sm; tk[g]=(cg*tk[g]+sm*Tb)/(cg+sm);
+            if(boilFx.length<300) boilFx.push(g);
+          }
+        }
+      }
+      // condensation: steam above saturation for this temperature turns back into water, releasing heat
+      if(!wet&&st[a]>2e-3){
+        const fa=(tk[a]+273)/T0, ex=st[a]-psat(tk[a])/fa;
+        if(ex>0){const dm=Math.min(st[a],ex*.25), u=dm/SPW, ca=cap(a); st[a]-=dm; wa[a]=Math.min(1,wa[a]+u); tk[a]+=u*LAT/ca;}
+      }
+      // freezing and melting in an open tile (ice here is a crust or slush, not yet a solid block)
+      if(tk[a]<0&&wa[a]>.001){const ca=cap(a),u=Math.min(wa[a],-tk[a]*ca/LATF,.02);wa[a]-=u;ic[a]+=u;tk[a]+=u*LATF/ca;}
+      else if(tk[a]>0&&ic[a]>.001){const ca=cap(a),u=Math.min(ic[a],tk[a]*ca/LATF,.02);ic[a]-=u;wa[a]+=u;tk[a]-=u*LATF/ca;}
+      if(ic[a]>=.9&&!occupied(a)){
+        // freeze solid: any liquid left joins the ice, and the gas is squeezed out into open neighbours
+        ic[a]+=wa[a]; wa[a]=0; tl[a]=ICE; displaceGas(a%WW,(a/WW)|0); wa[a]=0;
+      }
+    }
+  }
+}
+// tiles that boiled during the last gas step, for steam puffs near the dwarf
+let boilFx=[];
+const GA=k=>k==='o'?S.go:k==='c'?S.gc:k==='m'?S.gm:k==='n'?S.gn:k==='s'?S.gs:S.gh;
+const gasOpen=(x,y)=>x>1&&y>1&&x<WW-2&&y<WH-2&&!SOL[S.tiles[y*WW+x]]&&S.wa[y*WW+x]<=.9;
+const gmass=i=>S.go[i]+S.gc[i]+S.gm[i]+S.gh[i]+S.gn[i]+S.gs[i];
+const tfac=i=>(S.tk[i]+273)/T0;
+const pres=i=>gmass(i)*tfac(i);
+const pp=(A,i)=>A[i]*tfac(i); // partial pressure in bar
+// heat in °C·kg, spread over the gas (plus a little for nearby rock and machinery) of the first open tile
+function addHeat(x,y,q){
+  for(const [dx,dy] of [[0,0],[0,-1],[-1,0],[1,0]]) if(gasOpen(x+dx,y+dy)){const i=(y+dy)*WW+x+dx;S.tk[i]=Math.min(1500,S.tk[i]+q/heatCap(i));return;}
+}
+function addGas(x,y,k,a,temp){
+  if(a<=0) return true;
+  if(k==='w'){ // water goes into the liquid layer
+    for(const [dx,dy] of [[0,0],[0,-1],[-1,0],[1,0]]){const tx=x+dx,ty=y+dy,i=ty*WW+tx;if(tx>1&&ty>1&&tx<WW-2&&ty<WH-2&&!SOL[S.tiles[i]]&&S.wa[i]<1){S.wa[i]=Math.min(1,S.wa[i]+a);return true;}}
+    return false;
+  }
+  for(const [dx,dy] of [[0,0],[0,-1],[-1,0],[1,0],[0,1]]) if(gasOpen(x+dx,y+dy)){
+    const i=(y+dy)*WW+x+dx;
+    if(temp!==undefined){const ms=heatCap(i);S.tk[i]=(ms*S.tk[i]+a*temp)/(ms+a);}
+    GA(k)[i]+=a;return true;}
+  return false;
+}
+// takes up to a kg of gas k from the tile and its 8 neighbours, returns what it got
+function takeGas(x,y,k,a,rad=1){
+  const A=k==='w'?S.wa:GA(k); let got=0;
+  for(let r=0;r<=rad&&got<a;r++)for(let dy=-r;dy<=r&&got<a;dy++)for(let dx=-r;dx<=r&&got<a;dx++){
+    if(Math.max(Math.abs(dx),Math.abs(dy))!==r) continue;
+    const tx=x+dx,ty=y+dy; if(tx<2||ty<2||tx>=WW-2||ty>=WH-2||SOL[S.tiles[ty*WW+tx]]) continue;
+    const i=ty*WW+tx, t=Math.min(A[i],a-got); A[i]-=t; got+=t;
+  }
+  return got;
+}
+// a solid placed into a gas tile pushes its gas into open neighbours
+function displaceGas(x,y){
+  const i=y*WW+x, nb=[[0,-1],[-1,0],[1,0],[0,1]].filter(([dx,dy])=>gasOpen(x+dx,y+dy));
+  for(const k of GASES){const A=GA(k),v=A[i];A[i]=0;if(!nb.length)continue;for(const [dx,dy] of nb)A[(y+dy)*WW+x+dx]+=v/nb.length;}
+  const w=S.wa[i]; S.wa[i]=0; if(w>0) addGas(x,y-1,'w',w);
+}
+// Combustion: oxygen is the oxidizer, not the fuel. A fire draws up to `need` kg of free O2 from the
+// air around it and binds it into new molecules, so that oxygen is gone. Returns the fraction it got.
+//   coal (carbon):  C + O2 -> CO2                 all of it leaves as CO2
+//   methane:        CH4 + 2 O2 -> CO2 + 2 H2O     half the oxygen ends up in CO2, half in water (as steam)
+//   hydrogen:       2 H2 + O2 -> 2 H2O            only steam, which condenses and drips as it cools
+// (water units match the Galvanic still: 1 water = 3 kg O2 + 1.5 kg H2)
+// Like a candle, a flame burns fully down to about 0.17 bar of oxygen, dims below that, and goes out near 0.12 bar.
+function localO2(x,y){let s=0,k=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(gasOpen(x+dx,y+dy)){s+=pp(S.go,(y+dy)*WW+x+dx);k++;}return k?s/k:0;}
+const FIRE_HEAT={c:1200,m:1350,h:1750};
+// Steam engine: a coal-fired boiler. At full load it boils STEAM_USE units of water per second (about
+// a cask every 25 s), takes STEAM_WARM seconds to raise steam from cold, and stalls if the air above
+// its exhaust is denser than STEAM_BACKP bar (the turbine needs a pressure drop to turn).
+const STEAM_USE=.04, STEAM_TANK=6, STEAM_WARM=8, STEAM_BACKP=3, STEAM_LEAK=.3;
+function burnAir(e,need,heatFrac=1){
+  if(need<=0) return 1;
+  const eff=clamp((localO2(e.x,e.y)-.12)/.05,0,1);
+  if(eff<=0) return 0;
+  const got=takeGas(e.x,e.y,'o',need*eff,1);
+  if(got>0){
+    const fuel=e.type==='gasgen'?(e.fuelK==='h'?'h':'m'):'c';
+    if(fuel==='c') addGas(e.x,e.y,'c',got);
+    else if(fuel==='m'){addGas(e.x,e.y,'c',got*.5);addGas(e.x,e.y,'s',got/6*SPW);} // the water leaves as hot steam
+    else addGas(e.x,e.y,'s',got/3*SPW);
+    // the fire's heat goes into the air: per kg of oxygen, hydrogen releases the most, then methane, then coal
+    addHeat(e.x,e.y,got*FIRE_HEAT[fuel]*heatFrac);
+  }
+  return got/need;
+}
+
+// ---------- vents ----------
+// carbon vents breathe hot volcanic gas (it rises at first, then cools and sinks); methane seeps out warm; the air springs are cool
+const VENT_T={c:45,m:35,o:12};
+function tickVents(dt){
+  for(const v of S.vents){
+    v.t+=dt;
+    if(v.act&&v.t>=v.on){v.act=false;v.t=0;}
+    else if(!v.act&&v.t>=v.off){v.act=true;v.t=0;}
+    v.blk=false; v.cap=false;
+    if(!v.act) continue;
+    const amt=v.rate*dt, cap=entAt(v.x,v.y-1);
+    if(cap&&cap.type==='ventcap'&&cap.outN<4){cap.acc=(cap.acc||0)+amt;cap.k=v.k;v.cap=true;continue;}
+    const i=(v.y-1)*WW+v.x;
+    if(gasOpen(v.x,v.y-1)&&pres(i)>5){v.blk=true;continue;}
+    if(!addGas(v.x,v.y-1,v.k,amt,VENT_T[v.k])) v.blk=true;
+    else if(Math.random()<dt*8&&Math.abs(v.x-S.player.x)<40&&Math.abs(v.y-S.player.y)<26) puff(v.x+.5,v.y-.1,v.k);
+  }
+}
+
+// ---------- discovery ----------
+// You see the open space connected to you (within a screen or so) plus one block into the rock.
+// Echo sensors reveal everything, rock included, within their radius.
+let seenT=0;
+function markSeen(x,y){for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const tx=x+dx,ty=y+dy;if(tx>=0&&ty>=0&&tx<WW&&ty<WH)S.seen[ty*WW+tx]=1;}}
+function revealView(){
+  const p=S.player, px=Math.floor(p.x+p.w/2), py=Math.floor(p.y+p.h/2), RX=26, RY=16;
+  const q=[py*WW+px], vis=new Set(q);
+  while(q.length){
+    const i=q.pop(), x=i%WW, y=(i/WW)|0;
+    markSeen(x,y);
+    for(const j of [i-1,i+1,i-WW,i+WW]){
+      if(vis.has(j)) continue; const jx=j%WW, jy=(j/WW)|0;
+      if(Math.abs(jx-px)>RX||Math.abs(jy-py)>RY||SOL[S.tiles[j]]) continue;
+      vis.add(j); q.push(j);
+    }
+  }
+}
+// ---------- gas knowledge ----------
+// Gases are invisible. The dwarf senses only the air within 2 tiles of their head; powered Gas
+// monitors read every tile of the open space connected to them (up to MON_MAX tiles).
+const MON_MAX=2400, MON_RX=50, MON_RY=28;
+let mon=null, monT=0;
+function scanRoom(e){
+  const sx=e.x, sy=e.y, start=sy*WW+sx, q=[start], vis=new Set(q), r={cnt:0,o:0,n:0,c:0,m:0,h:0,s:0,w:0,ok:0,open:false,pmax:0,tox:0,crush:0,co2:0,P:0,ta:0,tn:0,tmax:-99,hot:0};
+  while(q.length){
+    const i=q.pop();
+    r.cnt++; r.o+=S.go[i]; r.n+=S.gn[i]; r.c+=S.gc[i]; r.m+=S.gm[i]; r.h+=S.gh[i]; r.s+=S.gs[i]; r.w+=S.wa[i]; if(breathable(i)) r.ok++;
+    if(S.wa[i]<.5){const P=pres(i); r.P+=P; if(P>r.pmax)r.pmax=P; if(pp(S.go,i)>=O2_TOXIC)r.tox++; if(P>=P_CRUSH)r.crush++; if(pp(S.gc,i)>=CO2_TOXIC)r.co2++;
+      const T=S.tk[i]; r.ta+=T; r.tn++; if(T>r.tmax)r.tmax=T; if(T>=T_HOT)r.hot++;}
+    mon[i]=1;
+    for(const j of [i-1,i+1,i-WW,i+WW]){
+      if(vis.has(j)||SOL[S.tiles[j]]) continue;
+      const jx=j%WW, jy=(j/WW)|0;
+      if(Math.abs(jx-sx)>MON_RX||Math.abs(jy-sy)>MON_RY||vis.size>=MON_MAX){r.open=true;continue;}
+      vis.add(j); q.push(j);
+    }
+  }
+  e.room=r;
+}
+function scanMonitors(){
+  if(!mon||mon.length!==WW*WH) mon=new Uint8Array(WW*WH); else mon.fill(0);
+  for(const e of S.ents.values()) if(e.type==='monitor'){ if(e.on) scanRoom(e); else e.room=null; }
+}
+function known(i){
+  if(mon&&mon[i]) return true;
+  const p=S.player, x=i%WW, y=(i/WW)|0;
+  return Math.abs(x-Math.floor(p.x+p.w/2))<=2&&Math.abs(y-Math.floor(p.y+.35))<=2;
+}
+// doors open while the dwarf stands in them, letting gas and water through, and shut behind them
+const openDoors=new Set();
+function updateDoors(){
+  const p=S.player;
+  for(let ty=Math.floor(p.y);ty<=Math.floor(p.y+p.h);ty++)for(let tx=Math.floor(p.x);tx<=Math.floor(p.x+p.w);tx++){
+    const i=ty*WW+tx; if(S.tiles[i]===DOOR){S.tiles[i]=DOORO;openDoors.add(i);}
+  }
+  for(const i of openDoors){
+    const x=i%WW, y=(i/WW)|0;
+    if(S.tiles[i]!==DOORO){openDoors.delete(i);continue;}
+    if(x+1>p.x&&x<p.x+p.w&&y+1>p.y&&y<p.y+p.h) continue;
+    displaceGas(x,y); S.tiles[i]=DOOR; openDoors.delete(i);
+  }
+}
+function sensorReveal(e){
+  const r=has('sounding')?18:9;
+  for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){if(dx*dx+dy*dy>r*r)continue;const x=e.x+dx,y=e.y+dy;if(x>=0&&y>=0&&x<WW&&y<WH)S.seen[y*WW+x]=1;}
+}
+
+// ---------- power networks ----------
+// Poles link to poles within POLE_LINK tiles. Any producer or consumer inside a pole's
+// (2*POLE_AREA+1)-square joins that pole's network. Satisfaction lags one tick.
+let nets=[], wires=[], poleList=[], gens=[], netDirty=true;
+const netOf=e=>(e.net>=0&&nets[e.net])||null;
+function rebuildNets(){
+  poleList=[...S.ents.values()].filter(e=>e.type==='pole');
+  const par=poleList.map((_,i)=>i);
+  const find=i=>{while(par[i]!==i){par[i]=par[par[i]];i=par[i];}return i;};
+  wires=[];
+  for(let i=0;i<poleList.length;i++)for(let j=i+1;j<poleList.length;j++){
+    const a=poleList[i],b=poleList[j],dx=a.x-b.x,dy=a.y-b.y;
+    if(dx*dx+dy*dy<=POLE_LINK*POLE_LINK){par[find(i)]=find(j);wires.push([a,b]);}
+  }
+  const ids=new Map(); nets=[];
+  poleList.forEach((p,i)=>{const r=find(i);if(!ids.has(r)){ids.set(r,nets.length);nets.push({cap:0,dem:0,sat:0,load:0,lastCap:0,lastDem:0});}p.net=ids.get(r);});
+  gens=[];
+  for(const e of S.ents.values()){
+    if(e.type==='pole') continue;
+    e.net=-1;
+    if(!(PRODUCER[e.type]||CONSUMER[e.type])) continue;
+    if(e.type==='generator'||e.type==='gasgen') gens.push(e);
+    for(let i=0;i<poleList.length;i++){const p=poleList[i];if(Math.abs(p.x-e.x)<=POLE_AREA&&Math.abs(p.y-e.y)<=POLE_AREA){e.net=p.net;break;}}
+  }
+  netDirty=false;
+}
+// draws power from the entity's network; returns the fraction of full speed it gets
+function drawPower(e){
+  const n=netOf(e);
+  if(!n){e.np=true;e.st='No power: put it inside a pylon\'s shaded area';return 0;}
+  n.dem+=CONSUMER[e.type];
+  if(n.sat<=0){e.np=true;e.st='No power: add a Mote coil or fuel an engine on this network';return 0;}
+  return n.sat;
+}
+function completeTech(tech){
+  S.unlocked.add(tech.id);
+  if(S.research.active===tech.id) S.research.active=null;
+  const unlock=HAND.filter(r=>r.lock===tech.id).map(r=>IT[r.out].n);
+  toast('Research complete: '+tech.n+'. '+(unlock.length?'You can now craft '+unlock.join(', ')+'.':tech.desc)+' Press T to pick the next topic.',true);
+  invDirty=true; hudDirty=true;
+}
+
+function makeEnt(type,x,y,dir){
+  const e={type,x,y,dir,net:-1};
+  if(type==='edrill'){e.t=0;e.out=null;e.outN=0;}
+  if(type==='generator'||type==='gasgen'){e.fuel=0;e.air=1;}
+  if(type==='generator'){e.water=0;e.heat=0;}
+  if(type==='candle') e.left=60;
+  if(type==='still'){e.water=0;}
+  if(type==='pump'){e.f='c';e.acc=0;e.out=null;e.outN=0;}
+  if(type==='ventcap'){e.acc=0;e.k=null;e.out=null;e.outN=0;}
+  if(type==='airvent'){e.q=[];e.left=0;e.k=null;}
+  if(type==='sensor') e.t=0;
+  if(type==='planter'){e.water=0;e.light=0;}
+  if(type==='monitor') e.room=null;
+  if(type==='lab'){e.t=0;e.packs={};}
+  if(type==='belt'||type==='lift') e.items=[];
+  if(type==='drill'){e.t=0;e.fuel=0;e.out=null;e.outN=0;}
+  if(type==='furnace'){e.t=0;e.fuel=0;e.in=null;e.inN=0;e.out=null;e.outN=0;}
+  if(type==='assembler'){e.t=0;e.r=0;e.buf={};e.out=null;e.outN=0;}
+  if(type==='chest') e.inv={};
+  return e;
+}
+
+// ---------- logistics ----------
+function accept(e,item){
+  switch(e.type){
+    case 'belt': case 'lift': {
+      const its=e.items;
+      if(its.length>=4||(its.length&&its[its.length-1].p<GAP)) return false;
+      its.push({item,p:0}); return true;
+    }
+    case 'drill': if(item==='coal'&&e.fuel<30){e.fuel+=5;return true;} return false;
+    case 'generator':
+      if(item==='coal'&&e.fuel<80){e.fuel+=10;return true;}
+      if(item==='water'&&(e.water||0)<STEAM_TANK){e.water=(e.water||0)+1;return true;} return false;
+    case 'gasgen':
+      if((item==='can_gas'||item==='can_h2')&&e.fuel<100){e.fuel+=20;e.fuelK=item==='can_h2'?'h':'m';return true;} return false;
+    case 'still': if(item==='water'&&e.water<10){e.water+=1;return true;} return false;
+    case 'planter': if(item==='water'&&e.water<5){e.water+=1;return true;} return false;
+    case 'airvent': if((CAN_GAS[item]||item==='water')&&e.q.length<6){e.q.push(item);return true;} return false;
+    case 'lab':
+      if((item==='survey'||item==='schematic')&&(e.packs[item]||0)<10){e.packs[item]=(e.packs[item]||0)+1;return true;}
+      return false;
+    case 'furnace':
+      if(item==='coal'&&e.fuel<40){e.fuel+=has('smelting')?6:4;return true;}
+      if(SMELT[item]&&(e.inN===0||e.in===item)&&e.inN<20){e.in=item;e.inN++;return true;}
+      return false;
+    case 'assembler': {
+      const r=ASM[e.r], need=r.in[item];
+      if(need&&(e.buf[item]||0)<need*4){e.buf[item]=(e.buf[item]||0)+1;return true;}
+      return false;
+    }
+    case 'chest': {
+      let tot=0; for(const k in e.inv) tot+=e.inv[k];
+      if(tot>=400) return false; e.inv[item]=(e.inv[item]||0)+1; return true;
+    }
+    case 'core': {
+      const g=GOALS[S.goal]; if(!g) return false;
+      const need=g.need[item];
+      if(need&&(S.delivered[item]||0)<need){S.delivered[item]=(S.delivered[item]||0)+1;coreFlash=1;checkGoal();return true;}
+      return false;
+    }
+  }
+  return false;
+}
+function pushOut(e){
+  if(e.outN>0){const t=entAt(e.x+e.dir,e.y);if(t&&accept(t,e.out)){e.outN--;if(!e.outN&&e.type!=='furnace')e.out=e.out;}}
+}
+function tickEnt(e,dt){
+  switch(e.type){
+    case 'belt': case 'lift': {
+      const v=(e.type==='belt'?1.8:1.5)*(has('fast_belts')?1.6:1), its=e.items;
+      for(let k=0;k<its.length;k++){
+        const lim=k===0?1:its[k-1].p-GAP;
+        if(lim>its[k].p) its[k].p=Math.min(its[k].p+v*dt,lim);
+      }
+      if(its.length&&its[0].p>=1){
+        const t=e.type==='belt'?entAt(e.x+e.dir,e.y):entAt(e.x,e.y+e.dir);
+        if(t&&accept(t,its[0].item)) its.shift();
+      }
+      break;
+    }
+    case 'drill': case 'edrill': {
+      pushOut(e);
+      const el=e.type==='edrill';
+      const bi=(e.y+1)*WW+e.x, bt=tileAt(e.x,e.y+1);
+      e.on=false; e.np=false;
+      if(!TP[bt].ore){e.st='Place directly on top of ore';break;}
+      if(e.outN>=4){e.st='Output blocked: nothing takes it';break;}
+      const free=bt===COAL;
+      let rate=1;
+      if(el){rate=drawPower(e);if(!rate)break;}
+      else{
+        if(!free&&e.fuel<=0){e.st='Needs coal (F to insert)';break;}
+        rate=burnAir(e,.01*dt);
+        if(rate<.05){e.st='Smothered: no oxygen for its fire';break;}
+      }
+      e.on=true; e.st=(rate<.95?'Short of air · ':'')+'Mining '+TP[bt].n.toLowerCase();
+      e.t+=dt*rate;
+      if(e.t>=DRILL_T*(el?.5:1)*(has('mining')?.7:1)){
+        e.t=0; if(!el&&!free)e.fuel--;
+        e.out=TP[bt].drop; e.outN++;
+        if(bt!==AQUIFER&&--S.ore[bi]<=0){S.tiles[bi]=STONE;S.ore[bi]=0;}
+      }
+      break;
+    }
+    case 'furnace': {
+      pushOut(e);
+      e.on=false;
+      if(e.inN<=0){e.st='Waiting for ore or stone';e.t=0;break;}
+      const prod=SMELT[e.in];
+      if((e.outN>0&&e.out!==prod)||e.outN>=20){e.st='Output full';break;}
+      if(e.fuel<=0){e.st='Needs coal';break;}
+      // richer oxygen burns hotter and faster (and uses oxygen faster)
+      const boost=clamp(localO2(e.x,e.y)/.21,1,1.6);
+      const air=burnAir(e,(has('smelting')?.027:.04)*boost*dt);
+      if(air<.05){e.st='Smothered: no oxygen for its fire';break;}
+      e.on=true; e.st=(air<.95?'Short of air · ':boost>1.1?'Oxygen-rich air, burning hot · ':'')+'Smelting '+IT[e.in].n.toLowerCase();
+      e.t+=dt*air*boost;
+      if(e.t>=SMELT_T/(has('smelting')?1.5:1)){e.t=0;e.inN--;e.fuel--;e.out=prod;e.outN++;if(!e.inN)e.in=null;}
+      break;
+    }
+    case 'assembler': {
+      pushOut(e);
+      const r=ASM[e.r]; e.on=false; e.np=false;
+      if(e.outN>=10){e.st='Output full';break;}
+      if(e.outN>0&&e.out!==r.out){e.st='Output full';break;}
+      let miss=null; for(const k in r.in) if((e.buf[k]||0)<r.in[k]){miss=k;break;}
+      if(miss){e.st='Needs '+IT[miss].n.toLowerCase();e.t=0;break;}
+      const rate=drawPower(e); if(!rate) break;
+      e.on=true; e.st='Making '+IT[r.out].n.toLowerCase();
+      e.t+=dt*rate;
+      if(e.t>=r.t){e.t=0;for(const k in r.in)e.buf[k]-=r.in[k];e.out=r.out;e.outN+=r.n;}
+      break;
+    }
+    case 'generator': case 'gasgen': {
+      const n=netOf(e), boiler=e.type==='generator'; e.on=false;
+      if(boiler){
+        // refill the boiler from any pool it stands in or beside (including its own condensed exhaust)
+        if(e.water===undefined){e.water=0;e.heat=0;}
+        if(e.water<STEAM_TANK-1) e.water+=takeGas(e.x,e.y,'w',Math.min(STEAM_TANK-e.water,.5*dt),1);
+        // the boiler cools when it cannot fire, and must raise steam again before it makes power
+        const canFire=e.fuel>0&&e.water>.01&&e.air>=.05;
+        e.heat=canFire?Math.min(1,e.heat+dt/STEAM_WARM):Math.max(0,e.heat-dt/30);
+      }
+      if(e.fuel<=0){e.st=e.type==='gasgen'?'Needs methane or hydrogen canisters (F)':'Needs coal (F to insert)';break;}
+      if(boiler&&e.water<=.01){e.st='Boiler dry: stand it in a pool or feed water casks (F)';break;}
+      if(!n){e.st='Not connected: put it inside a pylon\'s shaded area';break;}
+      if(e.air<.05){e.st='Smothered: no oxygen for its fire';e.air=1;break;} // retry next tick
+      if(boiler&&e.blockT>0){e.blockT-=dt;e.st='Exhaust blocked: the air above is over '+STEAM_BACKP+' bar, too dense for spent steam to escape';break;}
+      if(boiler&&e.heat<1){e.st='Raising steam · '+Math.round(e.heat*100)+'%';n.cap+=PRODUCER.generator*Math.min(1,e.air)*e.heat*e.heat;e.on=e.heat>.3;break;}
+      n.cap+=PRODUCER[e.type]*Math.min(1,e.air);
+      e.on=n.load>0; e.st=e.on?(e.air<.95?'Short of air · ':'')+'Running at '+Math.round(n.load*100)+'% load':'Idle: nothing is drawing power';
+      break;
+    }
+    case 'motecoil': {
+      const n=netOf(e), ok=tileAt(e.x,e.y+1)===STORM; e.on=ok&&!!n;
+      if(!ok){e.st='Place directly on top of stormcrystal';break;}
+      if(!n){e.st='Not connected: put it inside a pylon\'s shaded area';break;}
+      n.cap+=PRODUCER.motecoil; e.st='Catching spark motes · 20 kW';
+      if(Math.random()<dt*3&&Math.abs(e.x-S.player.x)<40) puff(e.x+.5,e.y+.6,'mote');
+      break;
+    }
+    case 'candle': {
+      e.on=true; e.st='Burning · '+Math.ceil(e.left)+' s left';
+      const i=e.y*WW+e.x;
+      if(gasOpen(e.x,e.y)&&pres(i)>4){e.st='Air too dense to release more';break;}
+      e.left-=dt; addGas(e.x,e.y,'o',.3*dt,140); // the chlorate burns hot: its oxygen comes out at 140 °C
+      if(e.left<=0){S.ents.delete(i);burst(e.x,e.y,SALT);}
+      break;
+    }
+    case 'still': {
+      e.on=false; e.np=false;
+      const i=e.y*WW+e.x;
+      if(e.water<=0){const got=takeGas(e.x,e.y,'w',Math.min(1,.4*dt*4),1);e.water+=got;}
+      if(e.water<=0){e.st='Needs water: stand it in a pool or feed water casks';break;}
+      if(gasOpen(e.x,e.y)&&pres(i)>3){e.st='Air too dense: gas has nowhere to go';break;}
+      const rate=drawPower(e); if(!rate) break;
+      const use=Math.min(e.water,.1*dt*rate); e.water-=use;
+      addGas(e.x,e.y,'o',use*3,35); addGas(e.x,e.y-1,'h',use*1.5,35);
+      e.on=true; e.st='Splitting water · '+(.3*rate).toFixed(2)+' kg/s oxygen';
+      break;
+    }
+    case 'pump': {
+      pushOut(e); e.on=false; e.np=false;
+      if(e.outN>=4){e.st='Output full: nothing takes the canisters';break;}
+      const rate=drawPower(e); if(!rate) break;
+      const want=(e.f==='w'?.3:1)*dt*rate, got=takeGas(e.x,e.y,e.f,want,1);
+      e.acc+=got; e.on=got>0;
+      e.st=got>0?'Pumping '+GAS_N[e.f].toLowerCase():'No '+GAS_N[e.f].toLowerCase()+' nearby';
+      const unit=e.f==='w'?1:CAN_KG;
+      if(e.acc>=unit){e.acc-=unit;e.out=e.f==='w'?'water':GAS_CAN[e.f];e.outN++;}
+      break;
+    }
+    case 'ventcap': {
+      pushOut(e);
+      const v=ventMap.get((e.y+1)*WW+e.x);
+      if(!v){e.on=false;e.st='Place directly on top of a natural vent';break;}
+      e.on=v.act;
+      if(e.acc>=CAN_KG&&e.outN<4){e.acc-=CAN_KG;e.out=GAS_CAN[v.k];e.outN++;}
+      e.st=e.outN>=4?'Full: the vent spills into the cave':v.act?'Bottling '+GAS_N[v.k].toLowerCase():'Vent dormant · erupts in '+Math.ceil(v.off-v.t)+' s';
+      break;
+    }
+    case 'airvent': {
+      e.on=false;
+      if(e.left<=0&&e.q.length){const it=e.q.shift();e.k=it==='water'?'w':CAN_GAS[it];e.left=it==='water'?1:CAN_KG;}
+      if(e.left<=0){e.st='Empty: feed it canisters or water casks';e.k=null;break;}
+      const i=e.y*WW+e.x;
+      if(e.k!=='w'&&gasOpen(e.x,e.y)&&pres(i)>2.5){e.st='Holding: the room is at full pressure';break;}
+      const a=Math.min(e.left,(e.k==='w'?.5:1)*dt);
+      if(addGas(e.x,e.y,e.k,a)){e.left-=a;e.on=true;e.st='Releasing '+GAS_N[e.k].toLowerCase();if(Math.random()<dt*6&&e.k!=='w')puff(e.x+.5,e.y+.5,e.k);}
+      else e.st='Blocked';
+      break;
+    }
+    case 'planter': {
+      // photosynthesis: 6 CO2 + 6 H2O + light -> sugar (moss) + 6 O2.
+      // By mass, each kg of CO2 frees about 0.73 kg of O2 and uses about 0.41 kg of water.
+      e.on=false;
+      let light=0;
+      for(let dy=-4;dy<=4&&light<1;dy++)for(let dx=-4;dx<=4;dx++){
+        const o=entAt(e.x+dx,e.y+dy);
+        if(o&&o.type==='lamp'&&o.on){light=1;break;}
+        if(light<.35&&Math.abs(dx)<=3&&Math.abs(dy)<=3&&(tileAt(e.x+dx,e.y+dy)===TORCH||(o&&o.type==='candle'))) light=.35;
+      }
+      e.light=light;
+      if(!light){e.st='Too dark to grow: needs a lit Mote lamp within 4 tiles, or a torch within 3 at a third of the speed';break;}
+      if(e.water<.05) e.water+=takeGas(e.x,e.y,'w',.5,1);
+      if(e.water<=0){e.st='Needs water: water casks (F) or a pool beside it';break;}
+      const want=.04*light*dt, got=takeGas(e.x,e.y,'c',want,1);
+      if(got<want*.05){e.st='Waiting for CO₂ in the air around it';break;}
+      e.water=Math.max(0,e.water-got*.09);
+      addGas(e.x,e.y,'o',got*.73);
+      e.on=true; e.st=(light<1?'Dim light · ':'')+'Turning CO₂ into oxygen · '+(got/dt*.73).toFixed(2)+' kg/s';
+      break;
+    }
+    case 'airlock': {
+      // powered: the rune seal closes around the dwarf, so the tile stays gas-tight even while they pass.
+      // unpowered: it swings open like a plain door while they stand in it, and gas leaks through.
+      e.np=false; const rate=drawPower(e); e.on=rate>0;
+      const i=e.y*WW+e.x, p=S.player, inside=p.x<e.x+1&&p.x+p.w>e.x&&p.y<e.y+1&&p.y+p.h>e.y;
+      e.inside=inside;
+      if(e.on||!inside){ if(S.tiles[i]===AIRLOCKO){displaceGas(e.x,e.y);S.tiles[i]=AIRLOCK;} }
+      else if(S.tiles[i]===AIRLOCK) S.tiles[i]=AIRLOCKO;
+      e.st=e.on?(inside?'Sealed around you: no gas passes':'Sealed'):'No power: opens like a plain door and leaks';
+      break;
+    }
+    case 'monitor': {
+      e.np=false; const rate=drawPower(e); e.on=rate>0;
+      if(!e.on){e.room=null;break;}
+      e.st=e.room?(e.room.open?'Reading '+e.room.cnt+'+ tiles · the space runs beyond its range':'Reading a sealed room of '+e.room.cnt+' tiles'):'Starting up';
+      break;
+    }
+    case 'sensor': {
+      e.t-=dt; e.on=true; e.st='Revealing '+(has('sounding')?18:9)+' tiles around it';
+      if(e.t<=0){e.t=2;sensorReveal(e);}
+      break;
+    }
+    case 'lamp': {
+      e.np=false; const rate=drawPower(e); e.on=rate>.3; if(e.on)e.st='Lit'; break;
+    }
+    case 'lab': {
+      const R=S.research, tech=R.active&&TECH[R.active];
+      e.on=false; e.np=false;
+      if(!tech){e.st='Pick a research topic (T)';break;}
+      const miss=tech.packs.find(k=>!(e.packs[k]>0));
+      if(miss){e.st='Needs '+IT[miss].n.toLowerCase();break;}
+      const rate=drawPower(e); if(!rate) break;
+      e.on=true; e.st='Researching '+tech.n.toLowerCase();
+      e.t+=dt*rate;
+      if(e.t>=RES_T){
+        e.t=0; for(const k of tech.packs) e.packs[k]--;
+        R.prog[tech.id]=(R.prog[tech.id]||0)+1;
+        if(R.prog[tech.id]>=tech.cost) completeTech(tech);
+      }
+      break;
+    }
+  }
+}
+function entContents(e){
+  const c={};
+  const add=(id,n)=>{if(id&&n>0)c[id]=(c[id]||0)+n;};
+  if(e.items) for(const it of e.items) add(it.item,1);
+  if(e.type==='drill'){add(e.out,e.outN);add('coal',Math.floor(e.fuel/5));}
+  if(e.type==='edrill') add(e.out,e.outN);
+  if(e.type==='generator'){add('coal',Math.floor(e.fuel/10));add('water',Math.floor(e.water||0));}
+  if(e.type==='gasgen') add(e.fuelK==='h'?'can_h2':'can_gas',Math.floor(e.fuel/20));
+  if(e.type==='still'||e.type==='planter') add('water',Math.floor(e.water));
+  if(e.type==='pump'||e.type==='ventcap') add(e.out,e.outN);
+  if(e.type==='airvent') for(const k of e.q) add(k,1);
+  if(e.type==='lab') for(const k in e.packs) add(k,e.packs[k]);
+  if(e.type==='furnace'){add(e.in,e.inN);add(e.out,e.outN);add('coal',Math.floor(e.fuel/4));}
+  if(e.type==='assembler'){for(const k in e.buf)add(k,e.buf[k]);add(e.out,e.outN);}
+  if(e.type==='chest') for(const k in e.inv) add(k,e.inv[k]);
+  return c;
+}
+function checkGoal(){
+  const g=GOALS[S.goal]; if(!g) return;
+  for(const k in g.need) if((S.delivered[k]||0)<g.need[k]) return;
+  S.goal++; S.delivered={};
+  if(g.unlock){S.unlocked.add(g.unlock);}
+  if(g.unlock==='assembler') toast('The Great Forge stirs. The Clockwork bench is unlocked. Craft one in the Pack (Tab).',true);
+  else if(g.unlock==='cell') toast('The Forge remembers its runes. Clockwork benches can now make Rune cores (Q picks the recipe).',true);
+  if(S.goal>=GOALS.length){S.won=true;showWin();}
+  hudDirty=true; invDirty=true;
+}
+
+// ---------- player actions ----------
+function inReach(tx,ty){const p=S.player,r=REACH+(has('reach')?3:0);const dx=tx+.5-(p.x+p.w/2),dy=ty+.5-(p.y+p.h/2);return dx*dx+dy*dy<=r*r;}
+function playerOverlaps(tx,ty){const p=S.player;return p.x<tx+1&&p.x+p.w>tx&&p.y<ty+1&&p.y+p.h>ty;}
+function hasSupport(tx,ty){
+  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const t=tileAt(tx+dx,ty+dy);if(t!==AIR&&t!==LEAF)return true;if(entAt(tx+dx,ty+dy))return true;}
+  return false;
+}
+function breakTile(tx,ty){
+  const i=ty*WW+tx, t=S.tiles[i];
+  burst(tx,ty,t);
+  if(t===LOG){ // fell the whole tree
+    const stack=[[tx,ty]],seen=new Set();let wood=0,n=0;
+    while(stack.length&&n<80){
+      const [x,y]=stack.pop(),k=y*WW+x; if(seen.has(k))continue; seen.add(k);
+      const tt=tileAt(x,y); if(tt!==LOG&&tt!==LEAF) continue;
+      if(tt===LOG)wood++; S.tiles[k]=AIR; n++;
+      stack.push([x,y-1],[x-1,y],[x+1,y]); if(tt===LEAF) stack.push([x,y+1]);
+    }
+    addInv('wood',wood+1); toast('+'+(wood+1)+' wood');
+    S.tiles[i]=AIR; return;
+  }
+  S.tiles[i]=AIR; S.ore[i]=0;
+  if(t===ICE){ // a block of ice chips out as a cask of water; any meltwater in it spills
+    if(S.ic[i]>=.5){addInv('water',1);toast('+1 water cask (ice)');}
+    S.ic[i]=0; return;
+  }
+  const d=TP[t].drop; if(d) addInv(d,1);
+}
+function removeEnt(e){
+  const c=entContents(e);
+  S.ents.delete(e.y*WW+e.x); netDirty=true;
+  if(e.type==='airlock') S.tiles[e.y*WW+e.x]=AIR;
+  addInv(e.type,1);
+  for(const k in c) addInv(k,c[k]);
+  burst(e.x,e.y,STONE);
+}
+function tryPlace(tx,ty){
+  const id=S.hotbar[S.sel]; if(!id||!have(id)) return false;
+  const it=IT[id]; if(it.place===undefined&&!it.ent) return false;
+  if(tx<0||ty<0||tx>=WW||ty>=WH||!inReach(tx,ty)) return false;
+  const i=ty*WW+tx; if(S.tiles[i]!==AIR||S.ents.has(i)) return false;
+  if(it.place!==undefined){
+    if(TP[it.place].solid&&(playerOverlaps(tx,ty)||!hasSupport(tx,ty))) return false;
+    if(SOL[it.place]){displaceGas(tx,ty); if(S.ic[i]>0){addGas(tx,ty-1,'w',S.ic[i]);S.ic[i]=0;}} // any slush is pushed out as water
+    if(it.place===DOOR) S.madeDoor=true;
+    if(it.place===CATWALK) S.madeCatwalk=true;
+    S.tiles[i]=it.place;
+  } else {
+    if(it.ent==='airlock'&&playerOverlaps(tx,ty)) return false;
+    S.ents.set(i,makeEnt(it.ent,tx,ty,it.ent==='lift'?S.lrot:NODIR.has(it.ent)?1:S.rot)); netDirty=true;
+    if(it.ent==='airlock'){displaceGas(tx,ty);S.tiles[i]=AIRLOCK;}
+  }
+  takeInv(id,1); return true;
+}
+function collect(e){
+  let got={};
+  const g=(id,n)=>{if(id&&n>0){got[id]=(got[id]||0)+n;addInv(id,n);}};
+  if(e.type==='chest'){for(const k in e.inv)g(k,e.inv[k]);e.inv={};}
+  else if(e.items){for(const it of e.items)g(it.item,1);e.items=[];}
+  else if(e.packs){for(const k in e.packs)g(k,e.packs[k]);e.packs={};}
+  else if(e.outN){g(e.out,e.outN);e.outN=0;}
+  const s=Object.entries(got).map(([k,n])=>'+'+n+' '+IT[k].n.toLowerCase()).join(', ');
+  toast(s||'Nothing to take');
+}
+function insert(e){
+  if(e.type==='core'){
+    const g=GOALS[S.goal]; if(!g){toast('The Core is complete.');return;}
+    let total=0;
+    for(const k in g.need){
+      const n=Math.min(have(k),g.need[k]-(S.delivered[k]||0));
+      if(n>0){takeInv(k,n);S.delivered[k]=(S.delivered[k]||0)+n;total+=n;}
+    }
+    if(total){coreFlash=1;toast('Delivered '+total+' items to the Core');checkGoal();}
+    else toast('You carry nothing the Core needs right now');
+    return;
+  }
+  const tryId=id=>{let n=0;while(have(id)&&n<50&&accept(e,id)){takeInv(id,1);n++;}return n;};
+  const sel=S.hotbar[S.sel];
+  let n=sel?tryId(sel):0, used=sel;
+  if(!n){
+    const cands=e.type==='furnace'?['coal','iron_ore','copper_ore','stone']:e.type==='drill'?['coal']:e.type==='generator'?['coal','water']:e.type==='assembler'?Object.keys(ASM[e.r].in):e.type==='lab'?['survey','schematic']
+      :e.type==='gasgen'?['can_gas','can_h2']:(e.type==='still'||e.type==='planter')?['water']:e.type==='airvent'?['can_o2','can_n2','water','can_co2','can_gas','can_h2']:[];
+    for(const c of cands){const k=tryId(c);if(k){n=k;used=c;break;}}
+  }
+  toast(n?'Inserted '+n+' '+IT[used].n.toLowerCase():'It will not take that');
+}
+function cycleRecipe(e){
+  const c=entContents({type:'assembler',buf:e.buf,out:e.out,outN:e.outN});
+  for(const k in c) addInv(k,c[k]);
+  e.buf={};e.outN=0;e.t=0;
+  let r=e.r;
+  for(let k=0;k<ASM.length;k++){r=(r+1)%ASM.length;if(!ASM[r].lock||S.unlocked.has(ASM[r].lock))break;}
+  e.r=r; toast('Assembler now makes '+IT[ASM[r].out].n.toLowerCase());
+}
+function craft(r,times){
+  let made=0;
+  for(let k=0;k<times;k++){
+    if(r.lock&&!S.unlocked.has(r.lock)) break;
+    let ok=true; for(const i in r.in) if(have(i)<r.in[i]) ok=false;
+    if(!ok) break;
+    for(const i in r.in) takeInv(i,r.in[i]);
+    addInv(r.out,r.n); made+=r.n;
+  }
+  if(made) toast('Crafted '+made+' '+IT[r.out].n.toLowerCase());
+}
+
+// ---------- physics ----------
+function hitRect(x,y,w,h){
+  for(let ty=Math.floor(y);ty<=Math.floor(y+h);ty++)
+    for(let tx=Math.floor(x);tx<=Math.floor(x+w);tx++) if(solidAt(tx,ty)) return true;
+  return false;
+}
+function updatePlayer(dt){
+  const p=S.player;
+  const L=keys.has('KeyA')||keys.has('ArrowLeft'), R=keys.has('KeyD')||keys.has('ArrowRight');
+  const wi=Math.floor(p.y+p.h*.6)*WW+Math.floor(p.x+p.w/2), swim=S.wa[wi]>.45;
+  p.swim=swim;
+  const target=((R?1:0)-(L?1:0))*MOVE*(swim?.55:1), acc=p.ground?55:30;
+  p.vx+=clamp(target-p.vx,-acc*dt,acc*dt);
+  if(L!==R) p.face=R?1:-1;
+  const up=keys.has('Space')||keys.has('KeyW')||keys.has('ArrowUp');
+  if(swim){
+    if(up) p.vy=Math.max(p.vy-30*dt,-5.5);
+    p.vy=Math.min(p.vy+GRAV*.25*dt,3.5);
+  } else {
+    if(up&&p.ground){p.vy=-JUMP;p.ground=false;}
+    p.vy=Math.min(p.vy+GRAV*dt,24);
+  }
+  p.x+=p.vx*dt;
+  if(hitRect(p.x,p.y,p.w,p.h)){
+    if(p.ground&&p.vx!==0&&!hitRect(p.x,p.y-1.02,p.w,p.h)) p.y-=1.02;
+    else{ if(p.vx>0)p.x=Math.floor(p.x+p.w)-p.w-1e-4; else p.x=Math.floor(p.x)+1+1e-4; p.vx=0; }
+  }
+  const oldBottom=p.y+p.h;
+  p.y+=p.vy*dt; p.ground=false;
+  // catwalks: land on them from above unless holding down; jumping up passes through
+  const drop=keys.has('KeyS')||keys.has('ArrowDown');
+  if(p.vy>=0&&!drop){
+    const ty=Math.floor(p.y+p.h);
+    if(oldBottom<=ty+.001)
+      for(let tx=Math.floor(p.x);tx<=Math.floor(p.x+p.w);tx++)
+        if(tileAt(tx,ty)===CATWALK){p.y=ty-p.h-1e-4;p.vy=0;p.ground=true;break;}
+  }
+  if(hitRect(p.x,p.y,p.w,p.h)){
+    if(p.vy>0){p.y=Math.floor(p.y+p.h)-p.h-1e-4;p.ground=true;}
+    else p.y=Math.floor(p.y)+1+1e-4;
+    p.vy=0;
+  }
+  p.x=clamp(p.x,1,WW-2); p.y=clamp(p.y,1,WH-3);
+}
+
+// ---------- input ----------
+const keys=new Set();
+const mouse={sx:-1,sy:-1,left:false,right:false,in:false};
+let mine=null, lastPlace=-1;
+function mouseTile(){return {tx:Math.floor((mouse.sx+camX)/T),ty:Math.floor((mouse.sy+camY)/T)};}
+function handleMining(dt){
+  if(!mouse.left||!mouse.in){mine=null;return;}
+  const {tx,ty}=mouseTile();
+  if(!inReach(tx,ty)){mine=null;return;}
+  const i=ty*WW+tx, e=S.ents.get(i);
+  let hard;
+  if(e){if(e.type==='core'){mine=null;return;}hard=.35;}
+  else{const t=tileAt(tx,ty);if(t===AIR||!isFinite(TP[t].hard)){mine=null;return;}hard=TP[t].hard;}
+  if(!mine||mine.i!==i) mine={i,x:tx,y:ty,p:0};
+  mine.p+=dt/hard;
+  if(mine.p>=1){mine=null;if(e)removeEnt(e);else breakTile(tx,ty);}
+}
+
+// ---------- particles & toasts ----------
+const parts=[];
+const TILE_RGB={1:'#7a5034',2:'#4e9a7a',3:'#70747c',4:'#26262b',5:'#cf7a44',6:'#d4bfae',8:'#c9b9a0',9:'#3f9fb0',10:'#aa7642',11:'#985040',12:'#f2a03d',18:'#f3eccd',19:'#8a6038',20:'#8a6038',24:'#cfeaf8'};
+function burst(tx,ty,t){
+  const col=TILE_RGB[t]||'#888';
+  for(let k=0;k<8;k++) parts.push({x:tx+.5,y:ty+.5,vx:(Math.random()-.5)*6,vy:-Math.random()*6,life:.5+Math.random()*.3,col});
+}
+// floating puffs: vent gas and spark motes
+const puffs=[];
+const PUFF_COL={s:'235,240,245',o:'190,230,255',n:'165,175,190',c:'120,95,140',m:'190,215,110',h:'235,225,255',mote:'150,220,255'};
+function puff(x,y,k){
+  if(puffs.length>260) return;
+  const mote=k==='mote', sink=k==='c';
+  puffs.push({x:x+(Math.random()-.5)*.6,y,vx:(Math.random()-.5)*(mote?1.6:.8),vy:mote?-(.6+Math.random()):sink?-.6:-(1+Math.random()*1.2),life:mote?1.4:1.8,max:mote?1.4:1.8,col:PUFF_COL[k],r:mote?.08:.22+Math.random()*.15,mote});
+}
+let toastEl;
+function toast(msg,big){
+  const d=document.createElement('div'); d.className='toast'+(big?' big':''); d.textContent=msg;
+  toastEl.appendChild(d); while(toastEl.children.length>5) toastEl.firstChild.remove();
+  setTimeout(()=>d.remove(),big?6000:2600);
+}
+
+// ---------- textures ----------
+const TEX={};
+function makeTex(t,v){
+  const c=document.createElement('canvas');c.width=c.height=16;const g=c.getContext('2d');
+  const img=g.createImageData(16,16),d=img.data;
+  const set=(x,y,r,gg,b,a=255)=>{const i=(y*16+x)*4;d[i]=r;d[i+1]=gg;d[i+2]=b;d[i+3]=a;};
+  const seed=t*101+v*7;
+  const n=(x,y,k=0)=>hash(x,y,seed+k);
+  const base=(r,g2,b,amp)=>{for(let y=0;y<16;y++)for(let x=0;x<16;x++){const k=(n(x,y)-.5)*amp+(n(x>>1,y>>1,3)-.5)*amp;set(x,y,clamp(r+k,0,255),clamp(g2+k,0,255),clamp(b+k,0,255));}};
+  const blobs=(r,g2,b,count,hi)=>{for(let q=0;q<count;q++){const cx=1+Math.floor(n(q,0,9)*14),cy=1+Math.floor(n(q,1,9)*14),rad=1.2+n(q,2,9)*1.4;
+    for(let y=0;y<16;y++)for(let x=0;x<16;x++){const dx=x-cx,dy=y-cy;if(dx*dx+dy*dy<=rad*rad){const k=(n(x,y,5)-.5)*30;const h=(dx<0&&dy<0)?hi:0;set(x,y,clamp(r+k+h,0,255),clamp(g2+k+h,0,255),clamp(b+k+h,0,255));}}}};
+  switch(t){
+    case DIRT: base(122,80,52,26); for(let k=0;k<6;k++)set(Math.floor(n(k,3,2)*16),Math.floor(n(k,4,2)*16),88,58,38); break;
+    case GRASS: base(104,100,104,22);
+      for(let x=0;x<16;x++){const h=2+Math.floor(n(x,0,4)*4);for(let y=0;y<h;y++){const k=(n(x,y,6)-.5)*40;set(x,y,clamp(70+k,0,255),clamp(170+k,0,255),clamp(140+k,0,255));}}
+      break;
+    case VENTC: case VENTM: case VENTO: {
+      const cc=t===VENTC?[230,110,70]:t===VENTM?[180,210,90]:[130,210,250];
+      base(58,56,62,18);
+      for(let y=0;y<16;y++)for(let x=0;x<16;x++){const dx=x-7.5,d=Math.abs(dx)+y*.35;if(d<3.2){const k=1-d/3.2;set(x,y,clamp(30+cc[0]*k,0,255),clamp(28+cc[1]*k,0,255),clamp(30+cc[2]*k,0,255));}}
+      for(const [x,y] of [[3,6],[12,5],[2,11],[13,12]]){set(x,y,90,86,92);set(x+1,y,40,38,44);}
+      break;}
+    case STORM: base(40,44,70,20); blobs(110,200,255,4,60);
+      for(let k=0;k<5;k++){const x=Math.floor(n(k,10,3)*15),y=Math.floor(n(k,11,3)*15);set(x,y,235,250,255);} break;
+    case AQUIFER: base(70,86,104,18); blobs(60,120,170,5,40); break;
+    case SALT: base(108,111,118,20); blobs(240,232,200,5,20); break;
+    case STONE: base(112,116,124,22); for(let k=0;k<5;k++){const x=Math.floor(n(k,5,2)*15),y=Math.floor(n(k,6,2)*15);set(x,y,82,85,92);set(x+1,y,82,85,92);} break;
+    case COAL: base(108,111,118,20); blobs(34,34,40,5,40); break;
+    case COPPER: base(108,111,118,20); blobs(206,118,62,5,40); break;
+    case IRON: base(108,111,118,20); blobs(212,186,164,5,30); break;
+    case BEDROCK: base(42,40,48,30); break;
+    case LOG: for(let y=0;y<16;y++)for(let x=0;x<16;x++){const s=(x===6||x===10)?-20:0;const k=(n(x,y)-.5)*14+s;
+        if(x<4||x>11) set(x,y,0,0,0,0); else set(x,y,clamp(200+k,0,255),clamp(186+k,0,255),clamp(160+k,0,255));} break;
+    case LEAF: for(let y=0;y<16;y++)for(let x=0;x<16;x++){const k=n(x,y);const spot=n(x>>2,y>>2,8)>.75&&((x+y)&3)===0;
+        if(spot)set(x,y,200,250,240);else{const s=(k-.5)*40;set(x,y,clamp(50+s,0,255),clamp(140+s,0,255),clamp(165+s,0,255));}} break;
+    case PLANK: base(170,118,66,14); for(let x=0;x<16;x++){set(x,0,120,80,44);set(x,5,120,80,44);set(x,10,120,80,44);set(x,15,120,80,44);}
+      set(Math.floor(n(1,1,1)*14)+1,2,120,80,44);set(Math.floor(n(2,1,1)*14)+1,7,120,80,44);set(Math.floor(n(3,1,1)*14)+1,12,120,80,44); break;
+    case BRICK: base(152,74,54,14);
+      for(let y=0;y<16;y++)for(let x=0;x<16;x++){const row=Math.floor(y/4);const off=row%2?4:0;if(y%4===3||(x+off)%8===7)set(x,y,92,82,76);} break;
+    case ICE: base(168,212,236,10);
+      for(let k=0;k<3;k++){const x0=Math.floor(n(k,12,2)*12),y0=Math.floor(n(k,13,2)*12);for(let s=0;s<5;s++)set(Math.min(15,x0+s),Math.min(15,y0+(s>>1)),232,248,255);}
+      for(let k=0;k<4;k++)set(Math.floor(n(k,14,3)*16),Math.floor(n(k,15,3)*16),120,170,210); break;
+    case 99: base(46,40,38,14); for(let k=0;k<6;k++){set(Math.floor(n(k,8,2)*16),Math.floor(n(k,9,2)*16),36,31,30);} break; // cave wall
+  }
+  g.putImageData(img,0,0); return c;
+}
+function buildTextures(){for(const t of [DIRT,GRASS,STONE,COAL,COPPER,IRON,BEDROCK,LOG,LEAF,PLANK,BRICK,VENTC,VENTM,VENTO,STORM,AQUIFER,SALT,ICE,99]){TEX[t]=[];for(let v=0;v<4;v++)TEX[t].push(makeTex(t,v));}}
+
+// ---------- drawing primitives ----------
+function arrow(g,px,py,s,dir){
+  const u=s/16; g.fillStyle='#f2a03d';
+  g.beginPath();
+  if(dir>0){g.moveTo(px+15.5*u,py+6*u);g.lineTo(px+12.5*u,py+3.5*u);g.lineTo(px+12.5*u,py+8.5*u);}
+  else{g.moveTo(px+.5*u,py+6*u);g.lineTo(px+3.5*u,py+3.5*u);g.lineTo(px+3.5*u,py+8.5*u);}
+  g.fill();
+}
+function bolt(g,x,y,u,col){
+  g.fillStyle=col;g.beginPath();
+  g.moveTo(x+.5*u,y);g.lineTo(x+2.6*u,y);g.lineTo(x+1.4*u,y+2.4*u);g.lineTo(x+2.8*u,y+2.4*u);
+  g.lineTo(x-.2*u,y+6.2*u);g.lineTo(x+.8*u,y+3.4*u);g.lineTo(x-.6*u,y+3.4*u);g.closePath();g.fill();
+}
+function doorArt(g,px,py,s,open){
+  const u=s/16;
+  if(open){g.fillStyle='#5a3b20';g.fillRect(px,py,2*u,s);g.fillRect(px+s-2*u,py,2*u,s);g.fillStyle='#8a6038';g.fillRect(px+2*u,py,2.5*u,s);g.fillStyle='#4a4f57';g.fillRect(px+2*u,py+3*u,2.5*u,1.4*u);g.fillRect(px+2*u,py+11*u,2.5*u,1.4*u);return;}
+  g.fillStyle='#7a5232';g.fillRect(px+1*u,py,14*u,s);
+  g.fillStyle='#5a3b20';g.fillRect(px+5.5*u,py,.8*u,s);g.fillRect(px+10*u,py,.8*u,s);g.fillRect(px+1*u,py,.8*u,s);g.fillRect(px+14.2*u,py,.8*u,s);
+  g.fillStyle='#4a4f57';g.fillRect(px+1*u,py+3*u,14*u,1.6*u);g.fillRect(px+1*u,py+11*u,14*u,1.6*u);
+  g.fillStyle='#c9a35a';g.fillRect(px+12*u,py+7*u,1.6*u,1.6*u);
+}
+// a grated platform: stand on it, jump up through it, gas and water pass straight through
+function catwalkArt(g,px,py,s){
+  const u=s/16;
+  g.fillStyle='#4a4f57';g.fillRect(px,py,s,2*u);g.fillStyle='#6b7480';g.fillRect(px,py,s,.8*u);
+  g.fillStyle='#2b2e33';for(let k=1;k<16;k+=3)g.fillRect(px+k*u,py+.8*u,1*u,1.2*u);
+  g.fillStyle='#5a3b20';g.fillRect(px+1*u,py+2*u,1.2*u,4*u);g.fillRect(px+13.8*u,py+2*u,1.2*u,4*u);
+}
+function drawDoor(px,py,open,x,y){g.drawImage(TEX[99][(hash(x,y,3)*4)|0],px,py,T,T);doorArt(g,px,py,T,open);}
+function drawEnt(g,type,dir,px,py,s,t,e,icon){
+  const u=s/16, on=e&&e.on;
+  switch(type){
+    case 'belt':{
+      g.fillStyle='#262a31';g.fillRect(px,py+10*u,s,6*u);
+      g.fillStyle='#4b525d';g.fillRect(px,py+10*u,s,1.5*u);
+      g.fillStyle='#1b1e23';g.fillRect(px,py+15*u,s,u);
+      g.fillStyle='#b9772f';
+      for(let k=0;k<3;k++){const x=mod(k*5.34+t*1.8*16*dir,16);if(x<14.5)g.fillRect(px+x*u,py+12*u,1.5*u,2*u);}
+      if(icon){g.fillStyle='#f2a03d';g.beginPath();g.moveTo(px+12*u,py+4*u);g.lineTo(px+7*u,py+1*u);g.lineTo(px+7*u,py+7*u);g.fill();g.fillRect(px+3*u,py+3*u,4*u,2*u);}
+      break;}
+    case 'lift':{
+      g.fillStyle='rgba(20,23,28,.6)';g.fillRect(px+2*u,py,12*u,s);
+      g.fillStyle='#b9772f';
+      for(let k=0;k<4;k++){const y=mod(k*4+t*1.5*16*dir,16);g.fillRect(px+3*u,py+y*u,10*u,1.2*u);}
+      g.fillStyle='#5b6470';g.fillRect(px+1*u,py,2*u,s);g.fillRect(px+13*u,py,2*u,s);
+      if(icon){g.fillStyle='#f2a03d';g.beginPath();g.moveTo(px+8*u,py+2*u);g.lineTo(px+4.5*u,py+6*u);g.lineTo(px+11.5*u,py+6*u);g.fill();}
+      break;}
+    case 'pole':{
+      g.fillStyle='#6e4a2a';g.fillRect(px+7*u,py+3*u,2*u,13*u);
+      g.fillStyle='#5a3b20';g.fillRect(px+3*u,py+3*u,10*u,1.6*u);
+      g.fillStyle='#c9d0d8';g.fillRect(px+3*u,py+1.6*u,1.4*u,1.6*u);g.fillRect(px+11.6*u,py+1.6*u,1.4*u,1.6*u);
+      break;}
+    case 'generator':{
+      g.fillStyle='#3b3f46';g.fillRect(px+1*u,py+6*u,14*u,10*u);
+      g.fillStyle='#2a2d33';g.fillRect(px+11*u,py+1*u,3*u,6*u);
+      g.save();g.translate(px+6*u,py+11*u);g.rotate(on?t*8:0);
+      g.fillStyle='#7a828c';g.beginPath();g.arc(0,0,3.6*u,0,Math.PI*2);g.fill();
+      g.fillStyle='#3b3f46';g.fillRect(-.6*u,-3.4*u,1.2*u,6.8*u);g.fillRect(-3.4*u,-.6*u,6.8*u,1.2*u);g.restore();
+      bolt(g,px+12*u,py+8.5*u,u,on?'#ffd75e':'#6b6550');
+      if(on){g.fillStyle='rgba(200,200,200,.35)';const s=mod(t*3,1);g.fillRect(px+(11.5+s)*u,py-(s*4)*u,2*u,2*u);}
+      break;}
+    case 'motecoil':{
+      g.fillStyle='#5a4a3a';g.fillRect(px+2*u,py+13*u,12*u,3*u);
+      g.fillStyle='#b8733a';for(let k=0;k<5;k++)g.fillRect(px+4*u,py+(4+k*2)*u,8*u,1.2*u);
+      g.fillStyle='#6b5640';g.fillRect(px+7*u,py+2*u,2*u,11*u);
+      const gl=on?.6+.4*Math.sin(t*9+((e&&e.x)||0)):.2;
+      g.fillStyle=`rgba(150,220,255,${gl})`;g.beginPath();g.arc(px+8*u,py+2.5*u,2.2*u,0,Math.PI*2);g.fill();
+      if(on){g.strokeStyle='rgba(210,245,255,.8)';g.lineWidth=.6*u;g.beginPath();const j=mod(t*7,1)*4;g.moveTo(px+8*u,py+2.5*u);g.lineTo(px+(5-j*.3)*u,py+(1+j)*u);g.lineTo(px+(3+j*.2)*u,py+3*u);g.stroke();}
+      break;}
+    case 'candle':{
+      g.fillStyle='#e9e2c6';g.fillRect(px+5*u,py+6*u,6*u,10*u);
+      g.fillStyle='#c9bf98';g.fillRect(px+5*u,py+6*u,1.5*u,10*u);
+      g.fillStyle='#5d7fb0';g.fillRect(px+5*u,py+10*u,6*u,1.2*u);
+      const f=Math.sin(t*14+((e&&e.x)||0))*.5;
+      g.fillStyle='#9fd8ff';g.beginPath();g.moveTo(px+8*u,py+(1+f)*u);g.quadraticCurveTo(px+11*u,py+5*u,px+8*u,py+6.4*u);g.quadraticCurveTo(px+5*u,py+5*u,px+8*u,py+(1+f)*u);g.fill();
+      g.fillStyle='#f1fbff';g.fillRect(px+7.4*u,py+3.8*u,1.2*u,2*u);
+      break;}
+    case 'still':{
+      g.fillStyle='#4a3e34';g.fillRect(px+1*u,py+13*u,14*u,3*u);
+      g.fillStyle='rgba(80,140,200,.75)';g.fillRect(px+2*u,py+6*u,5*u,7*u);g.fillRect(px+9*u,py+6*u,5*u,7*u);
+      g.strokeStyle='#c9a35a';g.lineWidth=u;g.strokeRect(px+2*u,py+6*u,5*u,7*u);g.strokeRect(px+9*u,py+6*u,5*u,7*u);
+      g.fillStyle='#c9a35a';g.fillRect(px+4*u,py+2*u,1*u,4*u);g.fillRect(px+11*u,py+2*u,1*u,4*u);g.fillRect(px+4*u,py+2*u,8*u,1*u);
+      if(on){g.fillStyle='#e6f6ff';const b=mod(t*5,5);g.fillRect(px+4*u,py+(12-b)*u,1*u,1*u);g.fillRect(px+11*u,py+(12-mod(b+2,5))*u,1*u,1*u);bolt(g,px+7.4*u,py+3*u,u*.5,'#ffd75e');}
+      g.fillStyle='#8fd0ff';g.fillRect(px+2.5*u,py+4.5*u,1.6*u,1*u);g.fillStyle='#f0e6ff';g.fillRect(px+11.8*u,py+4.5*u,1.6*u,1*u);
+      break;}
+    case 'pump':{
+      g.fillStyle='#4c5560';g.fillRect(px+2*u,py+5*u,12*u,11*u);
+      g.fillStyle='#2b3138';g.fillRect(px+4*u,py+7*u,8*u,6*u);
+      const col=e&&e.f?(e.f==='w'?'60,130,210':PUFF_COL[e.f]):'190,230,255';
+      g.fillStyle=`rgb(${col})`;g.fillRect(px+5*u,py+8*u,6*u,4*u);
+      g.save();g.translate(px+8*u,py+10*u);g.rotate(on?t*10:0);g.fillStyle='rgba(20,20,24,.6)';g.fillRect(-3*u,-.5*u,6*u,1*u);g.fillRect(-.5*u,-2*u,1*u,4*u);g.restore();
+      g.fillStyle='#6b7480';g.fillRect(px+1*u,py+3*u,3*u,3*u);g.fillRect(px+12*u,py+3*u,3*u,3*u);
+      arrow(g,px,py+1*u,s,dir);
+      break;}
+    case 'ventcap':{
+      g.fillStyle='#6a5a4c';g.fillRect(px+1*u,py+11*u,14*u,5*u);
+      g.fillStyle='#8a7a68';g.fillRect(px+3*u,py+5*u,10*u,6*u);
+      g.fillStyle='#c9a35a';g.fillRect(px+3*u,py+7*u,10*u,1*u);
+      const k=e&&e.out?CAN_GAS[e.out]:null;
+      g.fillStyle=k?`rgb(${PUFF_COL[k]})`:'#3a3330';g.fillRect(px+6*u,py+2*u,4*u,3*u);
+      if(on){g.fillStyle='rgba(255,255,255,.5)';g.fillRect(px+7*u,py+(1-mod(t*4,1))*u,2*u,1*u);}
+      arrow(g,px,py+2*u,s,dir);
+      break;}
+    case 'airvent':{
+      g.fillStyle='#4c5560';g.fillRect(px+1*u,py+12*u,14*u,4*u);
+      g.fillStyle='#2b3138';for(let k=0;k<4;k++)g.fillRect(px+(2.5+k*3)*u,py+12.6*u,2*u,.8*u);
+      g.fillStyle='#6b7480';g.fillRect(px+5*u,py+8*u,6*u,4*u);
+      if(on){const k=e.k==='w'?'80,150,230':PUFF_COL[e.k];g.fillStyle=`rgba(${k},.7)`;const b=mod(t*3,1);g.beginPath();g.arc(px+8*u,py+(7-b*5)*u,(1.5+b*1.5)*u,0,Math.PI*2);g.fill();}
+      break;}
+    case 'gasgen':{
+      g.fillStyle='#3d4a3e';g.fillRect(px+1*u,py+5*u,14*u,11*u);
+      g.fillStyle='#2a332b';g.fillRect(px+3*u,py+7*u,6*u,6*u);
+      g.fillStyle=on?'#ffcf6a':'#4a4030';g.beginPath();g.arc(px+6*u,py+10*u,(on?2+Math.sin(t*20)*.4:1.5)*u,0,Math.PI*2);g.fill();
+      g.fillStyle='#b6d05a';g.fillRect(px+11*u,py+7*u,3*u,6*u);g.fillStyle='#e6e0ff';g.fillRect(px+11*u,py+10*u,3*u,3*u);
+      bolt(g,px+11.6*u,py+1*u,u*.6,on?'#ffd75e':'#6b6550');
+      break;}
+    case 'airlock':{
+      const open=e&&!e.on&&e.inside, pass=e&&e.on&&e.inside;
+      g.fillStyle='#3d4249';g.fillRect(px,py,2.2*u,s);g.fillRect(px+s-2.2*u,py,2.2*u,s);
+      if(!open){
+        g.fillStyle=pass?'rgba(120,190,255,.35)':'#5b636e';g.fillRect(px+2.2*u,py,s-4.4*u,s);
+        if(!pass){g.fillStyle='#4a5058';g.fillRect(px+7.6*u,py,.8*u,s);g.fillStyle='#6b7480';g.fillRect(px+2.2*u,py+2*u,s-4.4*u,1*u);g.fillRect(px+2.2*u,py+13*u,s-4.4*u,1*u);}
+      }
+      const on=e?e.on:true, gl=on?.6+.4*Math.sin(t*3+((e&&e.y)||0)):0;
+      g.fillStyle=on?`rgba(150,215,255,${gl})`:'#3a3532';
+      g.beginPath();g.arc(px+8*u,py+8*u,2.4*u,0,Math.PI*2);g.fill();
+      g.strokeStyle='#c9a35a';g.lineWidth=.8*u;g.beginPath();g.arc(px+8*u,py+8*u,3.2*u,0,Math.PI*2);g.stroke();
+      break;}
+    case 'monitor':{
+      const r=e&&e.room, fr=r&&r.cnt?r.ok/r.cnt:0;
+      g.fillStyle='#5a4a3a';g.fillRect(px+6*u,py+12*u,4*u,4*u);
+      g.fillStyle='#c9a35a';g.fillRect(px+2*u,py+2*u,12*u,10*u);
+      g.fillStyle='#2a2520';g.fillRect(px+3*u,py+3*u,10*u,8*u);
+      g.fillStyle='#e9e1cf';g.beginPath();g.arc(px+8*u,py+9.5*u,4*u,Math.PI,0);g.fill();
+      g.strokeStyle='#2a2520';g.lineWidth=.8*u;g.beginPath();g.moveTo(px+8*u,py+9.5*u);
+      const a=Math.PI*(1+(on?fr:0));g.lineTo(px+8*u+Math.cos(a)*3.4*u,py+9.5*u+Math.sin(a)*3.4*u);g.stroke();
+      g.fillStyle=!on?'#4a4440':fr>.6?'#8bc994':fr>.25?'#f2a03d':'#e36b5d';g.fillRect(px+11.5*u,py+3.6*u,1.4*u,1.4*u);
+      break;}
+    case 'planter':{
+      g.fillStyle='#6e4a2a';g.fillRect(px+1*u,py+10*u,14*u,6*u);
+      g.fillStyle='#8a6038';g.fillRect(px+1*u,py+10*u,14*u,1.5*u);
+      g.fillStyle='#3a2a1c';g.fillRect(px+2*u,py+11.5*u,12*u,1*u);
+      const glow=on?.75+.25*Math.sin(t*2+((e&&e.x)||0)):.45;
+      for(const [x,h] of [[3,5],[5.5,7],[8,6],[10.5,8],[13,5]]){
+        g.fillStyle=`rgba(70,${Math.round(170*glow+40)},${Math.round(140*glow+30)},1)`;g.fillRect(px+(x-1)*u,py+(10-h)*u,2*u,h*u);
+        g.fillStyle=`rgba(190,255,230,${glow})`;g.fillRect(px+(x-.5)*u,py+(10-h)*u,1*u,1*u);
+      }
+      if(on){g.fillStyle='rgba(190,230,255,.6)';const b=mod(t*.8,1);g.beginPath();g.arc(px+8*u,py+(4-b*5)*u,(.8+b*.6)*u,0,Math.PI*2);g.fill();}
+      break;}
+    case 'sensor':{
+      g.fillStyle='#5a4a3a';g.fillRect(px+3*u,py+13*u,10*u,3*u);
+      g.fillStyle='#8a8f98';g.fillRect(px+7*u,py+5*u,2*u,8*u);
+      g.fillStyle='#c9a35a';g.beginPath();g.arc(px+8*u,py+5*u,4*u,Math.PI,0);g.fill();
+      g.fillStyle='#2a2520';g.fillRect(px+7.2*u,py+4*u,1.6*u,1*u);
+      if(on){const r=mod(t*1.2,1);g.strokeStyle=`rgba(201,163,90,${1-r})`;g.lineWidth=.8*u;g.beginPath();g.arc(px+8*u,py+5*u,(4+r*6)*u,Math.PI*1.1,Math.PI*1.9);g.stroke();}
+      break;}
+    case 'lamp':{
+      g.fillStyle='#4a4f57';g.fillRect(px+7*u,py+7*u,2*u,9*u);g.fillRect(px+5*u,py+15*u,6*u,1*u);
+      g.fillStyle=on?'#fff2c2':'#5d5a50';g.fillRect(px+5*u,py+2*u,6*u,5*u);
+      g.fillStyle='#2b2e33';g.fillRect(px+4.5*u,py+1.5*u,7*u,1*u);
+      break;}
+    case 'lab':{
+      g.fillStyle='#3f4e66';g.fillRect(px+1*u,py+10*u,14*u,6*u);
+      g.fillStyle=on?'rgba(140,220,255,.6)':'rgba(140,180,210,.3)';
+      g.beginPath();g.arc(px+8*u,py+10*u,6*u,Math.PI,0);g.fill();
+      g.strokeStyle='#9fb3c8';g.lineWidth=u;g.stroke();
+      if(on){g.fillStyle='#e6fbff';const b=mod(t*6,6);g.fillRect(px+6*u,py+(9-b)*u,1.4*u,1.4*u);g.fillRect(px+9.5*u,py+(9-mod(b+3,6))*u,1.2*u,1.2*u);}
+      g.fillStyle='#f2a03d';g.fillRect(px+3*u,py+12*u,3*u,2*u);
+      g.fillStyle='#5f86b8';g.fillRect(px+10*u,py+12*u,3*u,2*u);
+      break;}
+    case 'drill': case 'edrill':{
+      // bit reaches into the tile below
+      const el=type==='edrill';
+      const spin=on?t*(el?36:20):0;
+      g.fillStyle='#aab3bd';g.beginPath();g.moveTo(px+4.5*u,py+12*u);g.lineTo(px+11.5*u,py+12*u);g.lineTo(px+8*u,py+(icon?16:19)*u);g.fill();
+      g.fillStyle='#6d7680';const sy=mod(spin,3);g.fillRect(px+5.5*u,py+(12.5+sy)*u,5*u,.8*u);
+      g.fillStyle=el?'#56507a':'#35525b';g.fillRect(px+2*u,py+3*u,12*u,9.5*u);
+      g.fillStyle=el?'#3b3656':'#24393f';g.fillRect(px+2*u,py+3*u,12*u,2*u);g.fillRect(px+6*u,py+1*u,4*u,2.5*u);
+      if(el) bolt(g,px+11.5*u,py+5.6*u,u*.7,'#ffd75e');
+      g.fillStyle=on?'#ffc15e':'#3a3f45';g.fillRect(px+5*u,py+6.5*u,6*u,3*u);
+      if(on){g.fillStyle='#fff1c8';g.fillRect(px+5*u,py+6.5*u,2*u,1*u);}
+      arrow(g,px,py+2*u,s,dir);
+      break;}
+    case 'furnace':{
+      g.fillStyle='#5f5a57';g.fillRect(px+1*u,py+3*u,14*u,13*u);
+      g.fillStyle='#4a4644';for(let r=0;r<3;r++)g.fillRect(px+1*u,py+(6.5+r*3.5)*u,14*u,.8*u);
+      g.fillStyle='#4a4644';g.fillRect(px+10*u,py,3*u,4*u);
+      const fl=on?(.75+.25*Math.sin(t*17+((e&&e.x)||0))):0;
+      g.fillStyle=on?`rgb(255,${Math.round(120+60*fl)},40)`:'#181818';g.fillRect(px+4*u,py+9*u,8*u,5*u);
+      if(on){g.fillStyle='#ffe3a0';g.fillRect(px+6*u,py+11*u,4*u,3*u);}
+      arrow(g,px,py+1*u,s,dir);
+      break;}
+    case 'assembler':{
+      g.fillStyle='#3f4e66';g.fillRect(px+1*u,py+1*u,14*u,15*u);
+      g.fillStyle='#283143';g.fillRect(px+3*u,py+3*u,10*u,10*u);
+      if(e&&!icon){drawItem(g,ASM[e.r].out,px+4*u,py+4*u,8*u);}
+      else{g.fillStyle='#9aa3ad';g.fillRect(px+6*u,py+6*u,4*u,4*u);}
+      g.fillStyle=on?'#8bc994':'#596273';g.fillRect(px+3*u,py+14*u,2*u,1*u);
+      if(on){g.fillStyle='#f2a03d';g.fillRect(px+3*u+((t*20)%8)*u,py+13.2*u,2*u,.8*u);}
+      arrow(g,px,py+2*u,s,dir);
+      break;}
+    case 'chest':{
+      g.fillStyle='#7d5129';g.fillRect(px+2*u,py+6*u,12*u,10*u);
+      g.fillStyle='#9e6735';g.fillRect(px+2*u,py+5*u,12*u,4*u);
+      g.fillStyle='#5b3a1d';g.fillRect(px+2*u,py+9*u,12*u,1*u);
+      g.fillStyle='#d6b04e';g.fillRect(px+7*u,py+8*u,2*u,3*u);
+      break;}
+    case 'core':{
+      const tier=S?S.goal:0, pulse=.5+.5*Math.sin(t*2.4);
+      // the Great Forge: a stone hearth arch with runes that brighten each stage
+      g.fillStyle='#2e2a28';g.fillRect(px-4*u,py+10*u,24*u,6*u);
+      g.fillStyle='#4a4440';g.fillRect(px-3*u,py+8*u,22*u,3*u);
+      g.fillStyle='#57504a';g.fillRect(px-1*u,py-14*u,4*u,22*u);g.fillRect(px+13*u,py-14*u,4*u,22*u);
+      g.fillStyle='#57504a';g.beginPath();g.moveTo(px-2*u,py-13*u);g.lineTo(px+8*u,py-19*u);g.lineTo(px+18*u,py-13*u);g.lineTo(px+18*u,py-11*u);g.lineTo(px-2*u,py-11*u);g.fill();
+      for(let k=0;k<3;k++){g.fillStyle=k<tier?`rgba(255,200,110,${.6+.4*pulse})`:'#3a3532';g.fillRect(px+.3*u,py+(-9+k*5)*u,1.4*u,2.6*u);g.fillRect(px+14.3*u,py+(-9+k*5)*u,1.4*u,2.6*u);}
+      g.fillStyle='#24201e';g.fillRect(px+3*u,py+5*u,10*u,3*u);
+      const glow=.25+tier*.22+(coreFlash*.3);
+      const r=3.5+tier*.9+pulse*.6;
+      g.fillStyle=`rgba(242,160,61,${clamp(glow*.35,0,1)})`;g.beginPath();g.arc(px+8*u,py-2*u,(r+4)*u,0,Math.PI*2);g.fill();
+      g.fillStyle=tier>=3?'#fff0b8':`rgb(${200+tier*15},${110+tier*30},${50+tier*20})`;
+      g.beginPath();g.moveTo(px+8*u,py-2*u-r*1.5*u);g.lineTo(px+8*u+r*u,py-2*u);g.lineTo(px+8*u,py-2*u+r*1.5*u);g.lineTo(px+8*u-r*u,py-2*u);g.fill();
+      g.fillStyle='rgba(255,245,220,.7)';g.fillRect(px+7*u,py-4*u,1.4*u,2*u);
+      break;}
+  }
+}
+function plate(g,x,y,u,c1,c2){g.fillStyle=c2;g.fillRect(x+2*u,y+4*u,12*u,9*u);g.fillStyle=c1;g.fillRect(x+2*u,y+3*u,12*u,8*u);g.fillStyle='rgba(255,255,255,.35)';g.fillRect(x+3*u,y+4*u,6*u,1*u);}
+function rock(g,x,y,u,speck){g.fillStyle='#6f727a';g.beginPath();g.moveTo(x+3*u,y+12*u);g.lineTo(x+2*u,y+7*u);g.lineTo(x+6*u,y+3*u);g.lineTo(x+11*u,y+4*u);g.lineTo(x+14*u,y+9*u);g.lineTo(x+12*u,y+13*u);g.fill();
+  g.fillStyle=speck;g.fillRect(x+5*u,y+6*u,2*u,2*u);g.fillRect(x+9*u,y+8*u,3*u,2*u);g.fillRect(x+6*u,y+10*u,2*u,1.5*u);}
+function drawItem(g,id,x,y,s){
+  const it=IT[id]; if(!it) return; const u=s/16;
+  if(it.ent){drawEnt(g,it.ent,it.ent==='lift'?-1:1,x,y,s,0,null,true);return;}
+  switch(id){
+    case 'dirt': case 'stone': case 'brick': g.drawImage(TEX[it.place][0],x+2*u,y+2*u,12*u,12*u);
+      g.fillStyle='rgba(0,0,0,.25)';g.fillRect(x+2*u,y+13*u,12*u,u);return;
+    case 'wood': g.fillStyle='#6e4626';g.fillRect(x+2*u,y+5*u,11*u,7*u);g.fillStyle='#c79a5e';g.fillRect(x+11*u,y+5*u,3*u,7*u);g.fillStyle='#9a6a3a';g.fillRect(x+12*u,y+7*u,1*u,3*u);return;
+    case 'coal': g.fillStyle='#6a6c75';g.beginPath();g.moveTo(x+2.5*u,y+12.6*u);g.lineTo(x+1.3*u,y+6.8*u);g.lineTo(x+7*u,y+2.2*u);g.lineTo(x+12.6*u,y+4.4*u);g.lineTo(x+14.8*u,y+11.4*u);g.lineTo(x+9*u,y+13.8*u);g.fill();
+      g.fillStyle='#1d1d22';g.beginPath();g.moveTo(x+3*u,y+12*u);g.lineTo(x+2*u,y+7*u);g.lineTo(x+7*u,y+3*u);g.lineTo(x+12*u,y+5*u);g.lineTo(x+14*u,y+11*u);g.lineTo(x+9*u,y+13*u);g.fill();
+      g.fillStyle='#5b5d66';g.fillRect(x+6*u,y+5*u,2*u,1*u);g.fillRect(x+10*u,y+7*u,1*u,1*u);return;
+    case 'copper_ore': rock(g,x,y,u,'#df8448');return;
+    case 'iron_ore': rock(g,x,y,u,'#e2cdb8');return;
+    case 'iron_plate': plate(g,x,y,u,'#c7ced6','#848d98');return;
+    case 'copper_plate': plate(g,x,y,u,'#e58a4c','#9a4f27');return;
+    case 'gear':{g.save();g.translate(x+8*u,y+8*u);g.fillStyle='#98a2ad';
+      for(let k=0;k<8;k++){g.rotate(Math.PI/4);g.fillRect(-1.3*u,-6.5*u,2.6*u,3*u);}
+      g.beginPath();g.arc(0,0,4.6*u,0,Math.PI*2);g.fill();g.fillStyle='#5d6570';g.beginPath();g.arc(0,0,1.8*u,0,Math.PI*2);g.fill();g.restore();return;}
+    case 'circuit': g.fillStyle='#2f6e47';g.fillRect(x+2*u,y+3*u,12*u,10*u);g.fillStyle='#d9b24c';
+      g.fillRect(x+4*u,y+5*u,6*u,1*u);g.fillRect(x+9*u,y+5*u,1*u,5*u);g.fillRect(x+4*u,y+10*u,8*u,1*u);
+      g.fillStyle='#1c1f24';g.fillRect(x+5*u,y+7*u,3*u,2*u);return;
+    case 'cell':{g.fillStyle='#5a3a14';g.fillRect(x+5*u,y+2*u,6*u,12*u);g.fillStyle='#f2a03d';g.fillRect(x+6*u,y+4*u,4*u,8*u);
+      g.fillStyle='#ffe2a6';g.fillRect(x+6*u,y+4*u,2*u,3*u);g.fillStyle='#8c8f96';g.fillRect(x+4*u,y+1*u,8*u,2*u);g.fillRect(x+4*u,y+13*u,8*u,2*u);return;}
+    case 'survey': g.fillStyle='#7a5230';g.fillRect(x+3*u,y+2*u,10*u,13*u);g.fillStyle='#e9e1cf';g.fillRect(x+4.5*u,y+4*u,7*u,9.5*u);
+      g.fillStyle='#8a8378';g.fillRect(x+5.5*u,y+6*u,5*u,.8*u);g.fillRect(x+5.5*u,y+8*u,4*u,.8*u);
+      g.fillStyle='#e0772f';g.fillRect(x+5.5*u,y+10*u,3*u,2*u);g.fillStyle='#9aa3ad';g.fillRect(x+6*u,y+1.2*u,4*u,2*u);return;
+    case 'schematic': g.fillStyle='#2f5f9e';g.fillRect(x+2*u,y+3*u,12*u,10*u);g.fillStyle='#8fb6e8';
+      g.fillRect(x+4*u,y+5*u,8*u,.8*u);g.fillRect(x+4*u,y+5*u,.8*u,6*u);g.fillRect(x+7*u,y+8*u,5*u,.8*u);
+      g.strokeStyle='#cfe0f7';g.lineWidth=.8*u;g.beginPath();g.arc(x+9*u,y+10.5*u,1.6*u,0,Math.PI*2);g.stroke();
+      g.fillStyle='#24497a';g.fillRect(x+12.5*u,y+3*u,1.5*u,10*u);return;
+    case 'water': g.fillStyle='#6e4a2a';g.fillRect(x+3*u,y+3*u,10*u,12*u);g.fillStyle='#8a6038';g.fillRect(x+4*u,y+3*u,8*u,12*u);
+      g.fillStyle='#3d3d44';g.fillRect(x+3*u,y+5*u,10*u,1.2*u);g.fillRect(x+3*u,y+12*u,10*u,1.2*u);
+      g.fillStyle='#5aa8e8';g.fillRect(x+5*u,y+1.5*u,6*u,2.2*u);g.fillStyle='#bfe3ff';g.fillRect(x+6*u,y+1.8*u,2*u,.8*u);return;
+    case 'door': doorArt(g,x+2*u,y+1*u,13*u,false);return;
+    case 'catwalk': catwalkArt(g,x,y+4*u,s);return;
+    case 'brightsalt': g.fillStyle='#d9d2b4';g.beginPath();g.moveTo(x+3*u,y+13*u);g.lineTo(x+5*u,y+5*u);g.lineTo(x+8*u,y+2*u);g.lineTo(x+11*u,y+6*u);g.lineTo(x+13*u,y+13*u);g.fill();
+      g.fillStyle='#fffbe6';g.fillRect(x+7*u,y+4*u,2*u,5*u);g.fillStyle='#9fd8ff';g.fillRect(x+10*u,y+9*u,1.5*u,1.5*u);return;
+    case 'can_o2': case 'can_co2': case 'can_gas': case 'can_h2': case 'can_n2':{
+      const col=PUFF_COL[CAN_GAS[id]];
+      g.fillStyle='#5b636e';g.fillRect(x+4*u,y+3*u,8*u,12*u);g.fillStyle=`rgb(${col})`;g.fillRect(x+4*u,y+6*u,8*u,6*u);
+      g.fillStyle='rgba(255,255,255,.35)';g.fillRect(x+5*u,y+6*u,1.5*u,6*u);
+      g.fillStyle='#3a4048';g.fillRect(x+6*u,y+1*u,4*u,2.4*u);g.fillRect(x+4*u,y+14*u,8*u,1*u);return;}
+    case 'torch': g.fillStyle='#7a4c26';g.fillRect(x+7*u,y+6*u,2*u,9*u);g.fillStyle='#f2a03d';g.fillRect(x+6*u,y+2*u,4*u,5*u);g.fillStyle='#ffe9b0';g.fillRect(x+7*u,y+3*u,2*u,3*u);return;
+  }
+}
+const ICON={};
+function buildIcons(){
+  for(const id of ITEM_ORDER){const c=document.createElement('canvas');c.width=c.height=32;const g=c.getContext('2d');g.imageSmoothingEnabled=false;drawItem(g,id,0,0,32);ICON[id]=c.toDataURL();ICON[id+'_c']=c;}
+}
+
+// ---------- rendering ----------
+const cv=document.getElementById('game'), g=cv.getContext('2d');
+let T=24, camX=0, camY=0, dpr=1, coreFlash=0;
+function resize(){
+  dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=Math.floor(cv.clientWidth*dpr); cv.height=Math.floor(cv.clientHeight*dpr);
+  T=cv.clientWidth<700?18:24;
+}
+const lightC=document.createElement('canvas'), lightG=lightC.getContext('2d');
+let LG=null, LS=null, lightImg=null;
+function computeLight(lx0,ly0,LW,LH){
+  if(!LG||LG.length<LW*LH){LG=new Float32Array(LW*LH);LS=new Uint8Array(LW*LH);}
+  if(lightC.width!==LW||lightC.height!==LH){lightC.width=LW;lightC.height=LH;lightImg=lightG.createImageData(LW,LH);}
+  LG.fill(0);
+  for(let y=0;y<LH;y++)for(let x=0;x<LW;x++){
+    const t=tileAt(lx0+x,ly0+y), i=y*LW+x; LS[i]=SOL[t]; LG[i]=TLIGHT[t];
+  }
+  const src=(x,y,v)=>{const lx=x-lx0,ly=y-ly0;if(lx>=0&&ly>=0&&lx<LW&&ly<LH){const i=ly*LW+lx;if(LG[i]<v)LG[i]=v;}};
+  for(const e of S.ents.values()){
+    if(e.x<lx0||e.x>=lx0+LW||e.y<ly0-1||e.y>=ly0+LH) continue;
+    if(e.type==='core'){src(e.x,e.y,15);src(e.x,e.y-1,15);}
+    else if(e.type==='furnace') src(e.x,e.y,e.on?12:5);
+    else if(e.type==='drill'||e.type==='edrill') src(e.x,e.y,e.on?8:4);
+    else if(e.type==='lamp') src(e.x,e.y,e.on?15:2);
+    else if(e.type==='generator') src(e.x,e.y,e.on?9:3);
+    else if(e.type==='lab') src(e.x,e.y,e.on?8:4);
+    else if(e.type==='assembler') src(e.x,e.y,6);
+    else if(e.type==='motecoil') src(e.x,e.y,e.on?11:6);
+    else if(e.type==='candle') src(e.x,e.y,12);
+    else if(e.type==='gasgen') src(e.x,e.y,e.on?10:3);
+    else if(e.type==='still') src(e.x,e.y,e.on?8:3);
+    else if(e.type==='planter') src(e.x,e.y,e.on?6:3);
+    else src(e.x,e.y,3);
+  }
+  const p=S.player; src(Math.floor(p.x+p.w/2),Math.floor(p.y+.5),9); src(Math.floor(p.x+p.w/2),Math.floor(p.y+1.4),8);
+  for(let pass=0;pass<2;pass++){
+    for(let y=0;y<LH;y++)for(let x=0;x<LW;x++){const i=y*LW+x,d=LS[i]?2.6:1;let v=LG[i];
+      if(x>0&&LG[i-1]-d>v)v=LG[i-1]-d; if(y>0&&LG[i-LW]-d>v)v=LG[i-LW]-d; LG[i]=v;}
+    for(let y=LH-1;y>=0;y--)for(let x=LW-1;x>=0;x--){const i=y*LW+x,d=LS[i]?2.6:1;let v=LG[i];
+      if(x<LW-1&&LG[i+1]-d>v)v=LG[i+1]-d; if(y<LH-1&&LG[i+LW]-d>v)v=LG[i+LW]-d; LG[i]=v;}
+  }
+  const dd=lightImg.data;
+  for(let i=0;i<LW*LH;i++){const l=clamp(Math.max(LG[i],2.2)/15,0,1);const a=Math.pow(1-l,1.25);dd[i*4]=5;dd[i*4+1]=6;dd[i*4+2]=10;dd[i*4+3]=Math.round(a*255);}
+  lightG.putImageData(lightImg,0,0);
+}
+const TLIGHT=new Uint8Array(32); TLIGHT[TORCH]=14; TLIGHT[LEAF]=6; TLIGHT[GRASS]=4; TLIGHT[STORM]=9; TLIGHT[VENTC]=7; TLIGHT[VENTM]=6; TLIGHT[VENTO]=8;
+let gasView=0; // 0 off, 1 gases, 2 heat
+// heat colours: cold blue, comfortable grey-green, warm amber, scorching red, white-hot
+const HEAT_STOPS=[[-20,[170,140,255]],[0,[60,110,230]],[22,[70,120,100]],[40,[220,170,60]],[60,[230,70,40]],[200,[255,240,220]]];
+function heatRGB(t){
+  if(t<=HEAT_STOPS[0][0]) return HEAT_STOPS[0][1];
+  for(let k=1;k<HEAT_STOPS.length;k++){const [t1,c1]=HEAT_STOPS[k];if(t<=t1){const [t0,c0]=HEAT_STOPS[k-1],f=(t-t0)/(t1-t0);return c0.map((v,j)=>Math.round(v+(c1[j]-v)*f));}}
+  return HEAT_STOPS[HEAT_STOPS.length-1][1];
+}
+const GV_RGB={s:[200,205,215],n:[78,92,110],o:[124,200,242],c:[143,106,168],m:[182,208,90],h:[236,228,255]};
+function render(){
+  const vw=cv.clientWidth, vh=cv.clientHeight;
+  g.setTransform(dpr,0,0,dpr,0,0); g.imageSmoothingEnabled=false;
+  const p=S.player;
+  camX=Math.round(clamp((p.x+p.w/2)*T-vw/2,0,WW*T-vw));
+  camY=Math.round(clamp((p.y+p.h/2)*T-vh/2,0,WH*T-vh));
+  g.fillStyle='#030305';g.fillRect(0,0,vw,vh);
+  const x0=Math.max(0,Math.floor(camX/T)), y0=Math.max(0,Math.floor(camY/T));
+  const x1=Math.min(WW-1,Math.floor((camX+vw)/T)), y1=Math.min(WH-1,Math.floor((camY+vh)/T));
+  const t=S.time, SEEN=S.seen, WA=S.wa;
+  for(let y=y0;y<=y1;y++){
+    for(let x=x0;x<=x1;x++){
+      const i=y*WW+x;
+      if(!SEEN[i]) continue;
+      const tt=S.tiles[i], px=x*T-camX, py=y*T-camY;
+      if(!SOL[tt]){
+        g.drawImage(TEX[99][(hash(x,y,3)*4)|0],px,py,T,T);
+        const kn=known(i), c=kn?S.gc[i]:0, m=kn?S.gm[i]:0;
+        if(c>.15){g.fillStyle=`rgba(70,45,85,${Math.min(.5,c*.35)})`;g.fillRect(px,py,T,T);}
+        if(m>.15){g.fillStyle=`rgba(150,190,70,${Math.min(.35,m*.25)})`;g.fillRect(px,py,T,T);}
+        if(kn&&S.tk[i]>45){g.fillStyle=`rgba(255,90,30,${Math.min(.3,(S.tk[i]-45)/200)})`;g.fillRect(px,py,T,T);} // heat haze
+      }
+      if(tt===AIR) continue;
+      if(tt===DOOR||tt===DOORO){drawDoor(px,py,tt===DOORO,x,y);continue;}
+      if(tt===CATWALK){catwalkArt(g,px,py,T);continue;}
+      if(tt===AIRLOCK||tt===AIRLOCKO){g.drawImage(TEX[99][(hash(x,y,3)*4)|0],px,py,T,T);continue;}
+      if(tt===TORCH){
+        const u=T/16; g.fillStyle='#7a4c26';g.fillRect(px+7*u,py+6*u,2*u,8*u);
+        const f=Math.sin(t*13+x*7)*.6; g.fillStyle='#f2a03d';g.fillRect(px+6*u,py+(2+f*.3)*u,4*u,5*u);
+        g.fillStyle='#ffe9b0';g.fillRect(px+7*u,py+(3+f*.5)*u,2*u,3*u); continue;
+      }
+      g.drawImage(TEX[tt][(hash(x,y,1)*4)|0],px,py,T,T);
+      if(TP[tt].solid){
+        if(!solidAt(x,y-1)&&tt!==GRASS){g.fillStyle='rgba(255,255,255,.12)';g.fillRect(px,py,T,2);}
+        if(!solidAt(x,y+1)){g.fillStyle='rgba(0,0,0,.35)';g.fillRect(px,py+T-2,T,2);}
+        if(!solidAt(x-1,y)){g.fillStyle='rgba(0,0,0,.18)';g.fillRect(px,py,2,T);}
+        if(!solidAt(x+1,y)){g.fillStyle='rgba(0,0,0,.18)';g.fillRect(px+T-2,py,2,T);}
+      }
+    }
+  }
+  // entities
+  for(const e of S.ents.values()){
+    if(e.x<x0-1||e.x>x1+1||e.y<y0-1||e.y>y1+2) continue;
+    if(!SEEN[e.y*WW+e.x]) continue;
+    const px=e.x*T-camX, py=e.y*T-camY;
+    drawEnt(g,e.type,e.dir,px,py,T,t,e,false);
+    if(e.np&&((t*2.5)|0)%2===0){g.fillStyle='rgba(10,10,12,.7)';g.fillRect(px+T*.3,py-T*.55,T*.4,T*.5);bolt(g,px+T*.45,py-T*.52,T/14,'#ffd75e');}
+    if(e.items){
+      const s=T*.5;
+      for(const it of e.items){
+        let ix,iy;
+        if(e.type==='belt'){ix=px+(e.dir>0?it.p:1-it.p)*T-s/2;iy=py+T*.62-s/2-2;}
+        else{ix=px+T/2-s/2;iy=py+(e.dir<0?1-it.p:it.p)*T-s/2;}
+        g.drawImage(ICON[it.item+'_c'],ix,iy,s,s);
+      }
+    }
+  }
+  // power wires
+  g.strokeStyle='#16110c';g.lineWidth=1.5;
+  for(const [a,b] of wires){
+    if(Math.max(a.x,b.x)<x0-1||Math.min(a.x,b.x)>x1+1||Math.max(a.y,b.y)<y0-1||Math.min(a.y,b.y)>y1+1) continue;
+    const ax=(a.x+.5)*T-camX, ay=(a.y+.18)*T-camY, bx=(b.x+.5)*T-camX, by=(b.y+.18)*T-camY;
+    g.beginPath();g.moveTo(ax,ay);g.quadraticCurveTo((ax+bx)/2,(ay+by)/2+T*.7,bx,by);g.stroke();
+  }
+  // player
+  drawPlayer(p);
+  // water: fills from the bottom of each tile, full when water sits above
+  // ice crust and slush in open tiles sits at the bottom of the tile, under any liquid
+  const IC=S.ic;
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const i=y*WW+x, q=IC[i]; if(q<.02||!SEEN[i]||S.tiles[i]===ICE) continue;
+    const h=Math.max(2,Math.round(T*Math.min(1,q))), px=x*T-camX, py=y*T-camY+T-h;
+    g.fillStyle='rgba(200,232,250,.85)';g.fillRect(px,py,T,h);g.fillStyle='rgba(255,255,255,.7)';g.fillRect(px,py,T,1.5);
+  }
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const i=y*WW+x, w=WA[i]; if(w<.02||!SEEN[i]||S.tiles[i]===ICE) continue;
+    const full=WA[i-WW]>.05, h=full?T:Math.max(2,Math.round(T*Math.min(1,w))), px=x*T-camX, py=y*T-camY+T-h;
+    g.fillStyle='rgba(40,110,190,.62)';g.fillRect(px,py,T,h);
+    if(!full){g.fillStyle='rgba(150,210,255,.55)';g.fillRect(px,py,T,1.5);}
+  }
+  // particles
+  for(const q of parts){g.fillStyle=q.col;g.fillRect(q.x*T-camX-2,q.y*T-camY-2,4,4);}
+  for(const q of puffs){const a=clamp(q.life/q.max,0,1);g.fillStyle=`rgba(${q.col},${(q.mote?.95:.45)*a})`;g.beginPath();g.arc(q.x*T-camX,q.y*T-camY,q.r*T*(q.mote?1:(1.6-a*.6)),0,Math.PI*2);g.fill();}
+  // lighting
+  const M=14, lx0=Math.max(0,x0-M), ly0=Math.max(0,y0-M), lx1=Math.min(WW-1,x1+M), ly1=Math.min(WH-1,y1+M);
+  const LW=lx1-lx0+1, LH=ly1-ly0+1;
+  computeLight(lx0,ly0,LW,LH);
+  g.imageSmoothingEnabled=true;
+  g.drawImage(lightC,0,0,LW,LH,lx0*T-camX+T/2-T/2,ly0*T-camY,LW*T,LH*T);
+  g.imageSmoothingEnabled=false;
+  // spark motes glow through the dark
+  for(const q of puffs) if(q.mote){const a=clamp(q.life/q.max,0,1);g.fillStyle=`rgba(200,240,255,${.8*a})`;g.fillRect(q.x*T-camX-1.5,q.y*T-camY-1.5,3,3);}
+  if(gasView){
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+      const i=y*WW+x, px=x*T-camX, py=y*T-camY;
+      if(!SEEN[i]) continue;
+      if(SOL[S.tiles[i]]){g.fillStyle='rgba(8,8,10,.55)';g.fillRect(px,py,T,T);continue;}
+      if(WA[i]>.9){g.fillStyle='rgba(40,110,200,.6)';g.fillRect(px,py,T,T);continue;}
+      if(!known(i)){g.fillStyle='rgba(20,20,26,.55)';g.fillRect(px,py,T,T);g.fillStyle='rgba(255,255,255,.05)';g.fillRect(px,py+((x+y)&1?0:T/2),T,1);continue;}
+      const P=pres(i);
+      if(P<.05){g.fillStyle='rgba(0,0,0,.7)';g.fillRect(px,py,T,T);continue;}
+      if(gasView===2){const c=heatRGB(S.tk[i]);g.fillStyle=`rgba(${c[0]},${c[1]},${c[2]},.6)`;g.fillRect(px,py,T,T);continue;}
+      let r=0,gg=0,b=0;
+      // nitrogen is inert filler: weight it down so oxygen, CO2 and fuels stand out against it
+      let wsum=0; for(const k of GASES) wsum+=GA(k)[i]*(k==='n'?.25:1);
+      for(const k of GASES){const f=GA(k)[i]*(k==='n'?.25:1)/wsum,cc=GV_RGB[k];r+=cc[0]*f;gg+=cc[1]*f;b+=cc[2]*f;}
+      g.fillStyle=`rgba(${r|0},${gg|0},${b|0},${clamp(.25+P*.25,.25,.75)})`;g.fillRect(px,py,T,T);
+    }
+  }
+  // gasping: the edges close in as breath runs out
+  if(p.breath<.5){const a=(.5-p.breath)*1.4, gr=g.createRadialGradient(vw/2,vh/2,Math.min(vw,vh)*.25,vw/2,vh/2,Math.max(vw,vh)*.7);
+    gr.addColorStop(0,'rgba(60,0,0,0)');gr.addColorStop(1,`rgba(60,0,0,${a})`);g.fillStyle=gr;g.fillRect(0,0,vw,vh);}
+  // cursor
+  if(mouse.in&&!uiOpen()){
+    const {tx,ty}=mouseTile(), px=tx*T-camX, py=ty*T-camY, ok=inReach(tx,ty);
+    const id=S.hotbar[S.sel], it=id&&IT[id];
+    const empty=tileAt(tx,ty)===AIR&&!entAt(tx,ty);
+    if(it&&it.ent&&(it.ent==='pole'||PRODUCER[it.ent]||CONSUMER[it.ent])){
+      // show where power reaches
+      g.fillStyle='rgba(255,215,94,.07)';g.strokeStyle='rgba(255,215,94,.45)';g.lineWidth=1;g.setLineDash([4,4]);
+      const area=(cx,cy)=>{const ax=(cx-POLE_AREA)*T-camX,ay=(cy-POLE_AREA)*T-camY,w=(POLE_AREA*2+1)*T;g.fillRect(ax,ay,w,w);g.strokeRect(ax+.5,ay+.5,w-1,w-1);};
+      for(const pl of poleList) if(pl.x>=x0-4&&pl.x<=x1+4&&pl.y>=y0-4&&pl.y<=y1+4) area(pl.x,pl.y);
+      if(it.ent==='pole'&&empty&&ok){
+        area(tx,ty);
+        g.setLineDash([]);g.strokeStyle='rgba(255,215,94,.6)';
+        for(const pl of poleList){const dx=pl.x-tx,dy=pl.y-ty;if(dx*dx+dy*dy<=POLE_LINK*POLE_LINK){g.beginPath();g.moveTo(px+T/2,py+T*.18);g.lineTo((pl.x+.5)*T-camX,(pl.y+.18)*T-camY);g.stroke();}}
+      }
+      g.setLineDash([]);
+    }
+    if(it&&(it.ent||it.place!==undefined)&&empty&&have(id)&&ok){
+      g.globalAlpha=.55;
+      if(it.ent) drawEnt(g,it.ent,it.ent==='lift'?S.lrot:NODIR.has(it.ent)?1:S.rot,px,py,T,t,null,false);
+      else if(it.place===TORCH) drawItem(g,'torch',px,py,T);
+      else if(it.place===DOOR) drawDoor(px,py,false,tx,ty);
+      else if(it.place===CATWALK) catwalkArt(g,px,py,T);
+      else g.drawImage(TEX[it.place][0],px,py,T,T);
+      g.globalAlpha=1;
+    }
+    g.strokeStyle=ok?'rgba(242,160,61,.9)':'rgba(227,107,93,.7)';g.lineWidth=2;g.strokeRect(px+1,py+1,T-2,T-2);
+    if(mine){const mx=mine.x*T-camX,my=mine.y*T-camY;g.fillStyle='rgba(0,0,0,.45)';g.fillRect(mx,my+T-4,T,4);g.fillStyle='#f2a03d';g.fillRect(mx,my+T-4,T*clamp(mine.p,0,1),4);
+      g.strokeStyle='rgba(20,15,10,.7)';g.lineWidth=1.5;g.beginPath();const c=mine.p;
+      if(c>.25){g.moveTo(mx+T*.5,my+T*.5);g.lineTo(mx+T*.2,my+T*.25);}
+      if(c>.5){g.moveTo(mx+T*.5,my+T*.5);g.lineTo(mx+T*.85,my+T*.3);}
+      if(c>.75){g.moveTo(mx+T*.5,my+T*.5);g.lineTo(mx+T*.4,my+T*.9);}
+      g.stroke();}
+  }
+}
+function drawPlayer(p){
+  const w=p.w*T,h=p.h*T,px=p.x*T-camX,py=p.y*T-camY;
+  g.save();g.translate(Math.round(px+w/2),Math.round(py));g.scale(p.face,1);
+  const u=h/28, walk=(Math.abs(p.vx)>.4&&p.ground)?Math.sin(S.time*15):0;
+  // a stout dwarf: iron helm with a mote lamp, braided red beard, leather apron, short boots
+  g.fillStyle='#3a2a20';g.fillRect((-5+walk*1.4)*u,23*u,4*u,5*u);g.fillRect((1-walk*1.4)*u,23*u,4*u,5*u);
+  g.fillStyle='#5a6270';g.fillRect(-6.5*u,12*u,13*u,12*u);
+  g.fillStyle='#7a5232';g.fillRect(-4*u,15*u,8*u,9*u);
+  g.fillStyle='#c9a35a';g.fillRect(-6.5*u,19*u,13*u,1.6*u);
+  const swing=mine?Math.sin(S.time*22)*5:0;
+  g.save();g.translate(1*u,13*u);g.rotate((-.4+swing*.1));
+  g.fillStyle='#4e5663';g.fillRect(-1.5*u,0,3.5*u,7*u);g.fillStyle='#d9a77e';g.fillRect(-1.2*u,6.5*u,3*u,2*u);
+  if(mine){g.fillStyle='#6e4626';g.fillRect(0,7*u,1.5*u,6*u);g.fillStyle='#aab3bd';g.beginPath();g.moveTo(-4*u,12*u);g.quadraticCurveTo(1*u,10*u,6*u,12*u);g.lineTo(6*u,13.5*u);g.quadraticCurveTo(1*u,11.6*u,-4*u,13.5*u);g.fill();}
+  g.restore();
+  g.fillStyle='#e2b48c';g.fillRect(-4*u,4*u,8*u,6*u);
+  g.fillStyle='#b5562a';g.beginPath();g.moveTo(-4.5*u,8*u);g.lineTo(5*u,8*u);g.lineTo(4*u,15*u);g.lineTo(1.5*u,19*u);g.lineTo(-1*u,15.5*u);g.lineTo(-4*u,14*u);g.fill();
+  g.fillStyle='#d4733a';g.fillRect(0,9*u,1.2*u,7*u);g.fillStyle='#c9a35a';g.fillRect(.8*u,15.5*u,1.6*u,1.3*u);
+  g.fillStyle='#1b1b1b';g.fillRect(2*u,6*u,1.3*u,1.4*u);
+  g.fillStyle='#e8b99a';g.fillRect(3.6*u,7*u,1.6*u,1.6*u);
+  g.fillStyle='#8a929e';g.beginPath();g.moveTo(-5.5*u,5*u);g.quadraticCurveTo(-5*u,-.5*u,0,-.5*u);g.quadraticCurveTo(5*u,-.5*u,5.5*u,5*u);g.fill();
+  g.fillStyle='#6a717c';g.fillRect(-5.5*u,4*u,11.5*u,1.4*u);
+  g.fillStyle='#c9a35a';g.fillRect(-.5*u,-.5*u,1*u,4.5*u);
+  g.fillStyle='#bfe9ff';g.fillRect(4*u,1.4*u,2.2*u,2.2*u);
+  if(S.player.breath<1&&!S.player.ok){g.fillStyle='rgba(190,230,255,.7)';const b=mod(S.time*1.5,1);g.beginPath();g.arc(6*u,(2-b*8)*u,1.2*u,0,Math.PI*2);g.fill();}
+  g.restore();
+}
+
+// ---------- HUD ----------
+const $=id=>document.getElementById(id);
+let invDirty=true, hudDirty=true, packOpen=false, resOpen=false, hudT=0, lastInvSig='';
+const uiOpen=()=>packOpen||resOpen;
+let lastResSig='';
+function buildHotbar(){
+  const hb=$('hotbar'); hb.innerHTML='';
+  S.hotbar.forEach((id,k)=>{
+    const b=document.createElement('button'); b.className='slot'+(k===S.sel?' sel':'')+(id&&!have(id)?' empty':'');
+    b.id='hb'+k; b.title=id?IT[id].n:'Empty slot';
+    b.innerHTML=`<span class="k">${k+1}</span>`+(id?`<img alt="" src="${ICON[id]}"><span class="n">${have(id)||''}</span>`:'');
+    b.addEventListener('click',()=>{S.sel=k;invDirty=true;});
+    hb.appendChild(b);
+  });
+  const id=S.hotbar[S.sel], it=id&&IT[id];
+  const rot=$('rot');
+  if(it&&it.ent==='pole'){
+    rot.innerHTML=`Spark pylon · powers machines in its shaded area, links to pylons within <b>${POLE_LINK}</b> tiles`;
+  } else if(it&&it.ent&&!NODIR.has(it.ent)){
+    const d=it.ent==='lift'?(S.lrot<0?'up':'down'):(S.rot>0?'right':'left');
+    rot.innerHTML=`${it.n} ${it.ent==='belt'||it.ent==='lift'?'moves items':'outputs'} <b>${d}</b> · R to rotate`;
+  } else rot.textContent=it?it.n:'';
+}
+function nextHint(){
+  const types=new Set([...S.ents.values()].map(e=>e.type));
+  const p=S.player;
+  if(!p.ok) return '<b>'+p.prob+'!</b> '+AIR_WARN[p.prob]+(p.prob==='Not enough oxygen'?' Or place an <b>Air candle</b> beside you.':'');
+  if(S.won) return 'Keep delving. Cap the far vents, split water for air, and build a rune core works that runs itself.';
+  if(!types.has('drill')) return '<b>Start:</b> walk east to the pale <b>iron outcrop</b>. Select the Burner drill (1) and right-click to place it on top of the ore. Press <b>F</b> on it to load coal.';
+  if(!types.has('furnace')) return '<b>Next:</b> place the Smelter on the side the drill\'s orange arrow points to. Ore flows straight in. Fuel it with <b>F</b>.';
+  if(!types.has('belt')) return '<b>Next:</b> lay Belts from the smelter\'s output arrow toward the Great Forge. Belts push into whatever they run into.';
+  if(S.goal===0&&!(S.inv.copper_plate>0)&&!(S.delivered.copper_plate>0)) return '<b>Fires need oxygen.</b> Smelters and burner drills burn their coal with oxygen from the air, using it up and giving off CO₂, which sinks. Gases are invisible: press <b>G</b> to sense the air right around you. <b>Copper</b> lies east of the iron.';
+  if(S.goal===0) return 'Plates on a belt that ends at the Great Forge are delivered automatically. You can also stand close and press <b>F</b> on it.';
+  if(!types.has('motecoil')) return '<b>Spark motes</b> swarm the blue <b>stormcrystal</b> west of the Forge. Place a Mote coil (6) on top of it and a Spark pylon (7) beside it to catch their power.';
+  if(!types.has('planter')&&S.goal>=1) return '<b>Clean the air:</b> place your Glowmoss planter low, where CO₂ pools, next to a torch or Mote lamp and the pool or a water cask. It turns CO₂ back into oxygen. Craft more from brick, dirt and stalkwood.';
+  if(S.goal>=1&&!S.madeCatwalk) return '<b>CO₂ pools on the floor.</b> Build <b>Catwalks</b> (Tab) to walk above it: gas flows through the grating. Jump up through them; hold <b>S</b> to drop down. <b>Stone doors</b> seal rooms and open as you pass.';
+  if(S.madeDoor&&!types.has('airlock')&&S.goal>=1) return '<b>Doors leak</b> while you stand in them. Research <b>Rune airlocks</b> (T): powered doors you can walk through that never let gas through.';
+  if(has('monitors')&&!types.has('monitor')) return '<b>Gas monitors:</b> place one in each room, inside a pylon\'s area. It reads the whole connected space every second; readouts appear under your breath bar and in gas view (<b>G</b>).';
+  if(S.goal===1&&!types.has('assembler')) return '<b>Next:</b> craft a Clockwork bench (Tab) and put it inside a pylon\'s shaded area. Feed it plates; <b>Q</b> picks what it makes.';
+  if(!types.has('lab')) return '<b>Research:</b> build a Scriptorium inside a pylon\'s area and feed it Delver notes. Press <b>T</b> to pick a topic. <b>Water splitting</b> gives you oxygen.';
+  if(!S.research.active&&TECHS.some(tc=>!has(tc.id)&&tc.req.every(has))) return '<b>Research:</b> your Scriptoriums are idle. Press <b>T</b> to pick a topic.';
+  if(has('splitting')&&!types.has('still')) return '<b>Oxygen:</b> craft a Galvanic still and stand it in the pool east of the copper, inside a pylon\'s area. It splits water into oxygen (sinks) and hydrogen (rises).';
+  if(!types.has('ventcap')) return '<b>Vents:</b> the Carbon vent at the west end of the hall erupts CO₂ now and then. Craft a Vent cap and place it on top to bottle it. The east tunnel hides a Methane vent; the western stairs lead to an Air spring.';
+  if(!types.has('sensor')) return '<b>Echo sensors</b> reveal rock and caves around them. Place one to find ore beyond the walls.';
+  if(S.goal===1) return 'Chain Smelter → Clockwork bench → Belt → Forge. A Chest at the end of a line buffers overflow.';
+  return 'Rune cores need brick: smelt stone in a Smelter. Benches set to Rune core take gears, rune circuits and brick.';
+}
+function updateGoalCard(){
+  const g0=GOALS[Math.min(S.goal,GOALS.length-1)], done=S.goal>=GOALS.length;
+  $('goalStep').textContent=done?'The Great Forge · complete':`The Great Forge · stage ${S.goal+1} of ${GOALS.length}`;
+  $('goalTitle').textContent=done?'The forge is awake':g0.title;
+  let h='';
+  if(!done) for(const k in g0.need){
+    const d=S.delivered[k]||0,n=g0.need[k];
+    h+=`<div class="need${d>=n?' done':''}"><img alt="" src="${ICON[k]}"><span>${IT[k].n}</span><span class="ct">${d} / ${n}</span><div class="bar"><i style="width:${(d/n*100).toFixed(1)}%"></i></div></div>`;
+  }
+  $('needs').innerHTML=h;
+  $('goalUnlock').textContent=done?'':g0.text;
+  $('hint').innerHTML=nextHint();
+  const R=S.research, tc=R.active&&TECH[R.active];
+  $('resLine').innerHTML=tc
+    ?`<div class="need"><img alt="" src="${ICON[tc.packs[tc.packs.length-1]]}"><span>Research: ${tc.n}</span><span class="ct">${R.prog[tc.id]||0} / ${tc.cost}</span><div class="bar"><i style="width:${((R.prog[tc.id]||0)/tc.cost*100).toFixed(1)}%"></i></div></div>`
+    :`<span class="small">Research: ${TECHS.every(t=>has(t.id))?'everything researched':'nothing picked · press <b>T</b>'}</span>`;
+}
+function buildResearch(){
+  const R=S.research, box=$('techs'); box.innerHTML='';
+  for(const tc of TECHS){
+    const done=has(tc.id), act=R.active===tc.id, missing=tc.req.filter(r=>!has(r)), prog=R.prog[tc.id]||0;
+    const d=document.createElement('div'); d.className='tech'+(done?' done':'')+(act?' active':'');
+    d.innerHTML=`<div class="nm">${tc.n}</div><div class="ds">${tc.desc}</div>
+      <div class="cost">${tc.cost} ×&nbsp;${tc.packs.map(k=>`<img alt="" src="${ICON[k]}">${IT[k].n}`).join(' + ')}</div>
+      <div class="bar"><i style="width:${done?100:(prog/tc.cost*100).toFixed(1)}%"></i></div>`;
+    const b=document.createElement('button');
+    if(done){b.textContent='Researched';b.disabled=true;}
+    else if(missing.length){b.textContent='Needs '+missing.map(r=>TECH[r].n).join(' + ');b.disabled=true;}
+    else if(act){b.textContent='In progress · '+prog+' / '+tc.cost;b.disabled=true;}
+    else{b.textContent=prog?'Resume':'Research';b.addEventListener('click',()=>{R.active=tc.id;toast('Researching '+tc.n);buildResearch();hudDirty=true;});}
+    d.appendChild(b); box.appendChild(d);
+  }
+}
+function setResearch(open){resOpen=open;$('research').hidden=!open;if(open){setPack(false);resOpen=true;$('research').hidden=false;buildResearch();}mouse.left=mouse.right=false;}
+function buildPack(){
+  const inv=$('inv'); inv.innerHTML='';
+  for(const id of ITEM_ORDER){
+    if(!have(id)) continue;
+    const b=document.createElement('button'); b.className='slot'; b.title=IT[id].n+' → hotbar slot '+(S.sel+1);
+    b.innerHTML=`<img alt="" src="${ICON[id]}"><span class="n">${have(id)}</span>`;
+    b.addEventListener('click',()=>{const old=S.hotbar.indexOf(id);if(old>=0)S.hotbar[old]=S.hotbar[S.sel];S.hotbar[S.sel]=id;invDirty=true;toast(IT[id].n+' set to slot '+(S.sel+1));});
+    inv.appendChild(b);
+  }
+  if(!inv.children.length) inv.innerHTML='<p class="small">Empty. Mine something.</p>';
+  const rc=$('recipes'); rc.innerHTML='';
+  for(const r of HAND){
+    const locked=r.lock&&!S.unlocked.has(r.lock);
+    let ok=!locked; const ing=Object.entries(r.in).map(([k,n])=>{const lack=have(k)<n;if(lack)ok=false;return `<span class="${lack?'lack':''}">${n} ${IT[k].n.toLowerCase()}</span>`;}).join(' · ');
+    const d=document.createElement('div'); d.className='rec'+(locked?' locked':'');
+    d.innerHTML=`<img alt="" src="${ICON[r.out]}"><div><div class="nm">${IT[r.out].n}${r.n>1?' ×'+r.n:''}</div><div class="ing">${locked?lockLabel(r.lock):ing}</div></div>`;
+    const b=document.createElement('button'); b.textContent='Craft'; b.disabled=!ok;
+    b.addEventListener('click',ev=>{craft(r,ev.shiftKey?5:1);buildPack();});
+    d.appendChild(b); rc.appendChild(d);
+  }
+  lastInvSig=JSON.stringify(S.inv)+[...S.unlocked].join();
+}
+function setPack(open){packOpen=open;$('pack').hidden=!open;if(open){resOpen=false;$('research').hidden=true;buildPack();}mouse.left=mouse.right=false;}
+function netLine(e){
+  const n=netOf(e);
+  if(!n) return 'Not on a power network';
+  return `Network ${Math.round(n.lastDem)} / ${Math.round(n.lastCap)} kW · ${Math.round((n.lastDem>0?n.sat:1)*100)}% powered`;
+}
+// a room readout: gas shares by mass, average pressure per tile, breathable share, water
+function roomLines(r){
+  const gas=r.o+r.n+r.c+r.m+r.h+r.s;
+  const pct=k=>gas>0?Math.round(r[k]/gas*100):0;
+  return `<div class="m">${GASES.filter(k=>r[k]>.05).map(k=>GAS_N[k]+' '+pct(k)+'%').join(' · ')||'Vacuum'}</div>`+
+    `<div class="m">${(r.P/Math.max(1,r.tn)).toFixed(2)} bar average, ${r.pmax.toFixed(1)} peak · ${r.tn?Math.round(r.ta/r.tn)+' °C average, '+Math.round(r.tmax)+' peak':''}</div>`+
+    `<div class="m">`+(r.tox||r.crush||r.co2||r.hot?`<span style="color:var(--bad)">${r.tox?r.tox+' tiles toxic O₂ ':''}${r.co2?r.co2+' tiles CO₂-poisoned ':''}${r.crush?r.crush+' tiles crushing ':''}${r.hot?r.hot+' tiles scorching':''}</span> · `:'')+`${Math.round(r.ok/Math.max(1,r.cnt)*100)}% breathable${r.w>.5?' · water '+r.w.toFixed(1):''}</div>`;
+}
+function updateTip(){
+  const tip=$('tip');
+  if(!mouse.in||uiOpen()){tip.hidden=true;return;}
+  const {tx,ty}=mouseTile(); const e=entAt(tx,ty); let h='';
+  if(e){
+    const dirW=e.dir>0?'right':'left';
+    switch(e.type){
+      case 'core':{const g0=GOALS[S.goal];h=`<div class="t">The Great Forge</div><div class="m">${g0?'Accepts what the goal card lists. F delivers from your pack. It breathes a little oxygen into the hall.':'Awake.'}</div>`;break;}
+      case 'motecoil': h=`<div class="t">Mote coil</div><div class="s">${e.st||''}</div><div class="m">${netLine(e)}</div>`;break;
+      case 'candle': h=`<div class="t">Air candle</div><div class="s">${e.st||''}</div><div class="m">Chlorate in the brightsalt breaks down as it burns, releasing 0.3 kg/s of oxygen</div>`;break;
+      case 'still': h=`<div class="t">Galvanic still</div><div class="s">${e.st||''}</div><div class="m">Water ${e.water.toFixed(1)} · ${netLine(e)}</div><div class="m">Draws water from the pool around it · F insert water casks</div>`;break;
+      case 'pump': h=`<div class="t">Pump · ${GAS_N[e.f]} · outputs ${dirW}</div><div class="s">${e.st||''}</div><div class="m">Filled ${e.acc.toFixed(1)} / ${e.f==='w'?1:CAN_KG} · holding ${e.outN} · ${netLine(e)}</div><div class="m">Q change gas · E take</div>`;break;
+      case 'ventcap': h=`<div class="t">Vent cap · outputs ${dirW}</div><div class="s">${e.st||''}</div><div class="m">Bottled ${(e.acc||0).toFixed(1)} / ${CAN_KG} kg · holding ${e.outN}</div><div class="m">E take canisters</div>`;break;
+      case 'airvent': h=`<div class="t">Air vent</div><div class="s">${e.st||''}</div><div class="m">${e.q.length} queued${e.left>0?` · ${e.left.toFixed(1)} ${e.k==='w'?'water':'kg '+GAS_N[e.k].toLowerCase()} left`:''}</div><div class="m">F insert canisters or water casks</div>`;break;
+      case 'sensor': h=`<div class="t">Echo sensor</div><div class="m">${e.st||''}</div>`;break;
+      case 'airlock': h=`<div class="t">Rune airlock</div><div class="s">${e.st||''}</div><div class="m">${netLine(e)}</div><div class="m">Stack them to fill a corridor. Gas and water never pass while it has power.</div>`;break;
+      case 'monitor': h=`<div class="t">Gas monitor</div><div class="s">${e.st||''}</div>${e.room?roomLines(e.room):''}<div class="m">${netLine(e)}</div>`;break;
+      case 'planter': h=`<div class="t">Glowmoss planter</div><div class="s">${e.st||''}</div><div class="m">Water ${e.water.toFixed(2)} · photosynthesis: CO₂ + water + light → oxygen</div><div class="m">F insert water casks</div>`;break;
+      case 'belt': h=`<div class="t">Belt → ${dirW}</div><div class="m">${e.items.length} item(s) · E take</div>`;break;
+      case 'lift': h=`<div class="t">Lift ${e.dir<0?'↑ up':'↓ down'}</div><div class="m">${e.items.length} item(s) · E take</div>`;break;
+      case 'pole': case 'generator': case 'gasgen': {
+        const nm={pole:'Spark pylon',generator:'Steam engine',gasgen:'Gas engine'}[e.type];
+        h=`<div class="t">${nm}</div>${e.st&&e.type!=='pole'?`<div class="s">${e.st}</div>`:''}<div class="m">${netLine(e)}</div>`;
+        if(e.type==='generator') h+=`<div class="m">Fuel ${Math.ceil(e.fuel)} s at full load · water ${(e.water||0).toFixed(1)} / ${STEAM_TANK} · boiler ${Math.round((e.heat||0)*100)}%</div><div class="m">Coal fire boils water; the steam turns the turbine, then vents above as hot steam that condenses and drips. Draws water from a pool around it · F insert coal or water casks</div>`;
+        if(e.type==='gasgen') h+=`<div class="m">Fuel ${Math.ceil(e.fuel)} s at full load · ${e.fuelK==='h'?'hydrogen + oxygen → water':'methane + oxygen → CO₂ + water'} · F insert canisters</div>`;
+        break;}
+      case 'lamp': h=`<div class="t">Mote lamp</div><div class="m">${netLine(e)}</div>`;break;
+      case 'lab':{const pk=Object.entries(e.packs).filter(([,n])=>n>0).map(([k,n])=>`${n} ${IT[k].n.toLowerCase()}`).join(', ');
+        h=`<div class="t">Scriptorium</div><div class="s">${e.st||''}</div><div class="m">${pk||'No packs'} · ${netLine(e)}</div><div class="m">T research · F insert packs</div>`;break;}
+      case 'edrill': h=`<div class="t">Spark drill · outputs ${dirW}</div><div class="s">${e.st||''}</div><div class="m">${netLine(e)}${e.outN?` · holding ${e.outN} ${IT[e.out].n.toLowerCase()}`:''}${TP[tileAt(e.x,e.y+1)].ore?` · vein ${S.ore[(e.y+1)*WW+e.x]} left`:''}</div>`;break;
+      case 'drill': h=`<div class="t">Burner drill · outputs ${dirW}</div><div class="s">${e.st||''}</div><div class="m">Fuel ${e.fuel} cycles · uses up oxygen${e.outN?` · holding ${e.outN} ${IT[e.out].n.toLowerCase()}`:''}${TP[tileAt(e.x,e.y+1)].ore?` · vein ${S.ore[(e.y+1)*WW+e.x]} left`:''}</div>`;break;
+      case 'furnace': h=`<div class="t">Smelter · outputs ${dirW}</div><div class="s">${e.st||''}</div><div class="m">In ${e.inN} ${e.in?IT[e.in].n.toLowerCase():''} · fuel ${e.fuel} · out ${e.outN} ${e.out?IT[e.out].n.toLowerCase():''}</div><div class="m">E take · F insert</div>`;break;
+      case 'assembler':{const r=ASM[e.r];h=`<div class="t">Clockwork bench · ${IT[r.out].n}</div><div class="s">${e.st||''}</div><div class="m">${Object.entries(r.in).map(([k,n])=>`${IT[k].n.toLowerCase()} ${e.buf[k]||0}/${n}`).join(' · ')} · out ${e.outN}</div><div class="m">${netLine(e)}</div><div class="m">Q recipe · E take · F insert</div>`;break;}
+      case 'chest':{const c=Object.entries(e.inv).filter(([,n])=>n>0).map(([k,n])=>`${n} ${IT[k].n.toLowerCase()}`).join(', ');h=`<div class="t">Chest</div><div class="m">${c||'Empty'} · E take all</div>`;break;}
+    }
+  } else {
+    const t=tileAt(tx,ty), i=ty*WW+tx;
+    if(tx<0||ty<0||tx>=WW||ty>=WH){}
+    else if(!S.seen[i]) h=`<div class="t">Unexplored</div><div class="m">Dig toward it, or place an Echo sensor nearby</div>`;
+    else if(TP[t].vent){
+      const v=ventMap.get(i);
+      if(v){const avg=v.rate*v.on/(v.on+v.off);
+        h=`<div class="t">${VENT_N[v.k]}</div><div class="s">${v.act?(v.cap?'Erupting into a vent cap':v.blk?'Erupting, but blocked or overpressured':'Erupting')+' · '+Math.ceil(v.on-v.t)+' s left':'Dormant · erupts in '+Math.ceil(v.off-v.t)+' s'}</div>
+          <div class="m">${v.rate} kg/s of ${GAS_N[v.k].toLowerCase()} for ${v.on} s, then rests ${v.off} s · about ${avg.toFixed(2)} kg/s on average</div><div class="m">Place a Vent cap on top to bottle it</div>`;}
+    }
+    else if(t!==AIR&&SOL[t]){h=`<div class="t">${TP[t].n}</div>`;if(t===ICE)h+=`<div class="m">${Math.round(S.tk[i])} °C · melts above 0 °C${S.tk[i]>0?' (melting now)':''} · mine it for a water cask</div>`;else if(t===DOOR)h+=`<div class="m">Blocks gas while shut, but leaks while you stand in it. A powered Rune airlock never leaks.</div>`;else if(t===AQUIFER)h+=`<div class="m">A drill on top pulls endless water casks</div>`;else if(t===STORM)h+=`<div class="m">Spark motes gather here. A Mote coil on top harvests them</div>`;else if(TP[t].ore)h+=`<div class="m">${S.ore[i]} units for a drill</div>`;}
+    else {
+      const P=pres(i), o=pp(S.go,i), w=S.wa[i], T=S.tk[i];
+      h=`<div class="t">${t===AIR?(w>.5?'Water':'Air'):TP[t].n}</div>`;
+      if(S.ic[i]>.02) h+=`<div class="m">Ice ${(S.ic[i]*100).toFixed(0)}% · ${Math.round(T)} °C · ${T<0?'freezing':T>0?'melting':'at 0 °C'}${S.ic[i]<.9?' · freezes solid at 90%':''}</div>`;
+      if(w>.05){const up=w>.9?i-WW:i, Pb=w>.9&&(SOL[S.tiles[up]]||S.wa[up]>.9)?null:pres(up);
+        h+=`<div class="m">Water ${(w*100).toFixed(0)}% · ${Math.round(T)} °C${Pb===null?' · under water or rock: it cannot boil here':' · boils at '+Math.round(boilT(Pb))+' °C at '+Pb.toFixed(2)+' bar'}</div>`;}
+      if(w<=.9&&!known(i)) h+=`<div class="m">Unmeasured: you only sense air within 2 tiles of you.</div><div class="m">${has('monitors')?'Place a powered Gas monitor in this space to read it.':'Research Gas monitors (T) to read whole rooms.'}</div>`;
+      else if(w<=.9) h+=`<div class="m">${mon&&mon[i]?'Gas monitor · ':''}${GASES.filter(k=>GA(k)[i]>.005).map(k=>GAS_N[k]+' '+GA(k)[i].toFixed(2)+' kg').join(' · ')||'Vacuum'}</div><div class="${breathable(i)?'m':'s'}">${breathable(i)?'Breathable':airProblem(i)} · ${P.toFixed(2)} bar · ${Math.round(T)} °C${o<.15?' · fires smother here':o>.3?' · fires burn hot here':''}</div>`;
+    }
+  }
+  if(!h){tip.hidden=true;return;}
+  tip.innerHTML=h; tip.hidden=false;
+  const r=tip.getBoundingClientRect();
+  tip.style.left=Math.min(mouse.sx+16,window.innerWidth-r.width-8)+'px';
+  tip.style.top=Math.min(mouse.sy+16,window.innerHeight-r.height-8)+'px';
+}
+function hud(dt){
+  hudT+=dt;
+  if(invDirty){buildHotbar();invDirty=false;hudDirty=true;}
+  if(hudT>.25||hudDirty){
+    hudT=0;hudDirty=false;updateGoalCard();
+    const p=S.player, hi=Math.floor(p.y+.35)*WW+Math.floor(p.x+p.w/2);
+    $('brBar').style.width=(p.breath*100).toFixed(0)+'%'; $('hpBar').style.width=(p.hp*100).toFixed(0)+'%';
+    $('vitals').classList.toggle('low',p.breath<.35);
+    const cxp=p.x+p.w/2, mons=[...S.ents.values()].filter(e=>e.type==='monitor').sort((a,b)=>Math.hypot(a.x-cxp,a.y-p.y)-Math.hypot(b.x-cxp,b.y-p.y)).slice(0,3);
+    $('rooms').innerHTML=mons.map(e=>{const d=Math.round(e.x-cxp), where=Math.abs(d)<2?'here':Math.abs(d)+' tiles '+(d>0?'east':'west');
+      return `<div class="rm"><b>Monitor ${where}</b>${e.room?roomLines(e.room):'<div class="m">No power: not reading</div>'}</div>`;}).join('');
+    $('airLine').innerHTML=p.swim&&S.wa[hi]>.5?'<span class="bad">Underwater</span> · holding breath'
+      :`${p.ok?'Air here':'<span class="bad">'+p.prob+'</span>'} · ${pres(hi).toFixed(2)} bar · ${Math.round(S.tk[hi])} °C · O₂ ${pp(S.go,hi).toFixed(2)} · N₂ ${pp(S.gn,hi).toFixed(2)} · CO₂ ${pp(S.gc,hi).toFixed(2)}${S.gm[hi]>.05?' · CH₄ '+pp(S.gm,hi).toFixed(2):''}${S.gh[hi]>.05?' · H₂ '+pp(S.gh,hi).toFixed(2):''}${S.gs[hi]>.05?' · steam '+pp(S.gs,hi).toFixed(2):''}`;
+    if(packOpen&&JSON.stringify(S.inv)+[...S.unlocked].join()!==lastInvSig) buildPack();
+    if(resOpen){const sig=JSON.stringify(S.research)+[...S.unlocked].join();if(sig!==lastResSig){lastResSig=sig;buildResearch();}}
+  }
+  updateTip();
+}
+function showWin(){
+  const m=Math.round(S.time/60);
+  $('winText').textContent=`The Core is lit after ${m} minute${m===1?'':'s'} underground. Your factory keeps running if you want to keep building.`;
+  $('win').hidden=false;
+}
+
+// ---------- save / load ----------
+const KEY='lodeforge-save-v2';
+function b64(u8){let s='';for(let i=0;i<u8.length;i+=8192)s+=String.fromCharCode.apply(null,u8.subarray(i,i+8192));return btoa(s);}
+function unb64(str){const s=atob(str),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;}
+// gas and water are stored only for open tiles, one byte each, to keep saves small
+function packF(f,sc,tiles){const u=[];for(let i=0;i<f.length;i++)if(!SOL[tiles[i]])u.push(Math.min(255,Math.round(f[i]*sc)));return b64(Uint8Array.from(u));}
+function unpackF(s,sc,tiles){const b=unb64(s),f=new Float32Array(WW*WH);let k=0;for(let i=0;i<f.length;i++)if(!SOL[tiles[i]])f[i]=b[k++]/sc;return f;}
+// temperature: 1 °C steps from -40 to 120 °C, then 15 °C steps up to about 1500 °C
+function packT(f,tiles){const u=[];for(let i=0;i<f.length;i++)if(keepT(tiles[i])){const t=f[i];u.push(t<=120?clamp(Math.round(t+40),0,160):Math.min(255,160+Math.round((t-120)/15)));}return b64(Uint8Array.from(u));}
+// ice: stored for open tiles and ice blocks
+function packI(f,tiles){const u=[];for(let i=0;i<f.length;i++)if(keepT(tiles[i]))u.push(Math.min(255,Math.round(f[i]*250)));return b64(Uint8Array.from(u));}
+function unpackI(s,tiles){const f=new Float32Array(WW*WH);if(!s)return f;const b=unb64(s);let k=0;for(let i=0;i<f.length;i++)if(keepT(tiles[i]))f[i]=b[k++]/250;return f;}
+function unpackT(s,tiles){const f=rockField();if(!s)return f;const b=unb64(s);let k=0;for(let i=0;i<f.length;i++)if(keepT(tiles[i])){const v=b[k++];f[i]=v<=160?v-40:120+(v-160)*15;}return f;}
+function serialize(){
+  return {v:2,seed:S.seed,tiles:b64(S.tiles),ore:b64(S.ore),seen:b64(S.seen),go:packF(S.go,40,S.tiles),gc:packF(S.gc,40,S.tiles),gm:packF(S.gm,40,S.tiles),gh:packF(S.gh,40,S.tiles),gn:packF(S.gn,40,S.tiles),gs:packF(S.gs,40,S.tiles),wa:packF(S.wa,250,S.tiles),ic:packI(S.ic,S.tiles),tk:packT(S.tk,S.tiles),
+    vents:S.vents,core:S.core,ents:[...S.ents.values()],
+    player:S.player,inv:S.inv,hotbar:S.hotbar,sel:S.sel,rot:S.rot,lrot:S.lrot,goal:S.goal,delivered:S.delivered,
+    unlocked:[...S.unlocked],won:S.won,time:S.time,research:S.research,madeDoor:!!S.madeDoor,madeCatwalk:!!S.madeCatwalk};
+}
+function deserialize(d){
+  if(d.v!==2) return null;
+  const tl=unb64(d.tiles); for(let i=0;i<tl.length;i++){if(tl[i]===DOORO)tl[i]=DOOR;if(tl[i]===AIRLOCKO)tl[i]=AIRLOCK;}
+  return {v:2,seed:d.seed,tiles:tl,ore:unb64(d.ore),seen:unb64(d.seen),go:unpackF(d.go,40,tl),gc:unpackF(d.gc,40,tl),gm:unpackF(d.gm,40,tl),gh:unpackF(d.gh,40,tl),gn:d.gn?unpackF(d.gn,40,tl):new Float32Array(WW*WH),gs:d.gs?unpackF(d.gs,40,tl):new Float32Array(WW*WH),wa:unpackF(d.wa,250,tl),ic:unpackI(d.ic,tl),tk:unpackT(d.tk,tl),
+    vents:d.vents,core:d.core,
+    ents:new Map(d.ents.map(e=>[e.y*WW+e.x,e])),player:Object.assign({breath:1,hp:1},d.player),inv:d.inv,hotbar:d.hotbar,sel:d.sel||0,rot:d.rot||1,lrot:d.lrot||-1,
+    goal:d.goal||0,delivered:d.delivered||{},unlocked:new Set(d.unlocked||[]),won:!!d.won,time:d.time||0,
+    research:d.research||{active:null,prog:{}},madeDoor:!!d.madeDoor,madeCatwalk:!!d.madeCatwalk};
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(serialize()));}catch(err){}}
+
+// ---------- world files ----------
+// A world file is a small JSON wrapper around the gzip-compressed save (base64), so it is one ordinary
+// .json file everywhere. Plain uncompressed saves (the raw serialize() object) load too.
+const gz=(bytes,way)=>new Response(new Blob([bytes]).stream().pipeThrough(way==='in'?new CompressionStream('gzip'):new DecompressionStream('gzip')));
+async function packWorld(){
+  const json=JSON.stringify(serialize()), meta={lodeforge:1,saved:new Date().toISOString(),minutes:Math.round(S.time/60)};
+  if(typeof CompressionStream==='function'){
+    try{const buf=new Uint8Array(await gz(new TextEncoder().encode(json),'in').arrayBuffer());return JSON.stringify({...meta,format:'gzip-base64',data:b64(buf)});}catch(err){}
+  }
+  return JSON.stringify({...meta,format:'json',data:json});
+}
+async function unpackWorld(text){
+  const o=JSON.parse(text);
+  if(o&&o.lodeforge){
+    if(o.format==='gzip-base64'){
+      if(typeof DecompressionStream!=='function') throw new Error('this browser cannot open compressed saves');
+      return JSON.parse(await gz(unb64(o.data),'out').text());
+    }
+    return JSON.parse(o.data);
+  }
+  return o;
+}
+function useWorld(d,from){
+  const s=d&&d.v===2&&d.tiles?deserialize(d):null;
+  if(!s) throw new Error('that is not a Lodeforge world');
+  S=s; indexVents(); netDirty=invDirty=hudDirty=true; S.player.ok=true; mon=null;
+  setPack(false); save(); toast('Loaded the world from '+from,true);
+}
+const fileStamp=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;};
+// In Claude's viewer the page asks the platform to hand the file over (the viewer confirms); on its own
+// web address it is an ordinary browser download.
+let dlNS=null;
+async function saveWorldFile(){
+  let text; try{text=await packWorld();}catch(err){toast('Could not pack the world: '+err.message);return;}
+  const filename='lodeforge-world-'+fileStamp()+'.json';
+  if(dlNS){
+    try{await dlNS.save({filename,data:text});toast('Saved '+filename);}
+    catch(err){toast(err&&err.code==='declined'?'Save cancelled':'Could not save the file'+(err&&err.message?': '+err.message:''));}
+    return;
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=filename;
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);
+  toast('Saved '+filename+' to your downloads');
+}
+// Autosave to a file the player picks (Chrome and Edge, on the game's own web address). The file handle is
+// remembered in this browser; after a reload the browser asks permission again, so resuming takes one click.
+const canPickFile=typeof window.showSaveFilePicker==='function'&&(()=>{try{return window.top===window;}catch(err){return false;}})();
+let fileH=null, fileOk=false, fileBusy=false, fileLast=0, fileErr='';
+function handleStore(mode,fn){return new Promise(res=>{try{const r=indexedDB.open('lodeforge',1);r.onupgradeneeded=()=>r.result.createObjectStore('h');
+  r.onsuccess=()=>{try{const tx=r.result.transaction('h',mode);const q=fn(tx.objectStore('h'));tx.oncomplete=()=>res(q&&q.result);tx.onerror=()=>res(null);}catch(err){res(null);}};r.onerror=()=>res(null);}catch(err){res(null);}});}
+async function writeWorldFile(){
+  if(!fileH||!fileOk||fileBusy) return;
+  fileBusy=true;
+  try{const w=await fileH.createWritable();await w.write(await packWorld());await w.close();fileLast=Date.now();fileErr='';}
+  catch(err){fileErr=err.message||'write failed';if(err.name==='NotAllowedError')fileOk=false;}
+  finally{fileBusy=false;updateFileUI();}
+}
+async function chooseWorldFile(){
+  try{
+    fileH=await window.showSaveFilePicker({suggestedName:'lodeforge-world.json',types:[{description:'Lodeforge world',accept:{'application/json':['.json']}}]});
+    fileOk=true; handleStore('readwrite',st=>st.put(fileH,'world')); await writeWorldFile();
+    if(fileOk) toast('Autosaving to '+fileH.name+' every 20 seconds');
+  }catch(err){if(err.name!=='AbortError')toast('Could not use that file: '+err.message);}
+  updateFileUI();
+}
+async function resumeWorldFile(){
+  if(!fileH) return;
+  try{fileOk=(await fileH.requestPermission({mode:'readwrite'}))==='granted';}catch(err){fileOk=false;}
+  if(fileOk){await writeWorldFile();toast('Autosaving to '+fileH.name+' again');} else toast('No permission to write '+fileH.name);
+  updateFileUI();
+}
+function stopWorldFile(){fileH=null;fileOk=false;handleStore('readwrite',st=>st.delete('world'));toast('Stopped autosaving to a file. Your browser still keeps its own save.');updateFileUI();}
+function updateFileUI(){
+  const btn=$('autoFile'), stop=$('stopFile'), st=$('fileState'); if(!btn) return;
+  btn.hidden=!canPickFile; $('autoNote').hidden=canPickFile; stop.hidden=!fileH;
+  btn.textContent=!fileH?'Autosave to a file…':fileOk?'Change autosave file…':'Resume autosave to '+fileH.name;
+  st.textContent=!fileH?'':!fileOk?'Paused until you allow it again':fileErr?'Last write failed: '+fileErr:fileLast?'Autosaving to '+fileH.name+' · last saved '+new Date(fileLast).toLocaleTimeString():'Autosaving to '+fileH.name;
+}
+async function initWorldFiles(){
+  if(typeof window.claude?.use==='function') window.claude.use('downloads').then(d=>{dlNS=d;}).catch(()=>{});
+  if(canPickFile){
+    const h=await handleStore('readonly',st=>st.get('world'));
+    if(h&&typeof h.queryPermission==='function'){fileH=h;try{fileOk=(await h.queryPermission({mode:'readwrite'}))==='granted';}catch(err){fileOk=false;}}
+  }
+  updateFileUI();
+}
+function loadLocal(){try{const s=localStorage.getItem(KEY);if(s)return deserialize(JSON.parse(s));}catch(err){}return null;}
+
+// ---------- events ----------
+function onKey(e,down){
+  if(['Space','Tab','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  if(!S) return;
+  if(!down){keys.delete(e.code);return;}
+  if(e.repeat&&!['KeyA','KeyD','KeyW','Space','ArrowLeft','ArrowRight','ArrowUp'].includes(e.code)) return;
+  keys.add(e.code);
+  if(e.code==='Tab'||e.code==='KeyC'){setPack(!packOpen);return;}
+  if(e.code==='KeyT'){setResearch(!resOpen);return;}
+  if(e.code==='Escape'){setPack(false);setResearch(false);$('win').hidden=true;return;}
+  if(e.code==='KeyG'){gasView=(gasView+1)%3;$('legend').hidden=gasView!==1;$('heatLegend').hidden=gasView!==2;
+    const reach=has('monitors')?'you see air near you and in rooms with a powered Gas monitor':'you can only sense air within 2 tiles. Research Gas monitors (T) to read whole rooms';
+    toast(gasView===0?'Gas view off':gasView===1?'Gas view: '+reach:'Heat view (G again to turn off): '+reach);return;}
+  if(/^Digit[1-9]$/.test(e.code)){S.sel=+e.code.slice(5)-1;invDirty=true;return;}
+  if(e.code==='KeyR'){const id=S.hotbar[S.sel];if(id==='lift')S.lrot*=-1;else S.rot*=-1;invDirty=true;return;}
+  if(uiOpen()) return;
+  const {tx,ty}=mouseTile(), ent=entAt(tx,ty);
+  if(['KeyE','KeyF','KeyQ'].includes(e.code)){
+    if(!ent){toast('Point at a machine first');return;}
+    if(!inReach(tx,ty)){toast('Too far away');return;}
+    if(e.code==='KeyE'&&ent.type!=='core') collect(ent);
+    if(e.code==='KeyF') insert(ent);
+    if(e.code==='KeyQ'){
+      if(ent.type==='assembler')cycleRecipe(ent);
+      else if(ent.type==='pump'){const c=entContents({type:'pump',out:ent.out,outN:ent.outN});for(const k in c)addInv(k,c[k]);ent.outN=0;ent.acc=0;ent.f=PUMP_F[(PUMP_F.indexOf(ent.f)+1)%PUMP_F.length];toast('Pump now takes '+GAS_N[ent.f].toLowerCase());}
+      else toast('Q changes a Clockwork bench recipe or a Pump\'s gas');
+    }
+  }
+}
+function bindEvents(){
+  addEventListener('keydown',e=>onKey(e,true));
+  addEventListener('keyup',e=>onKey(e,false));
+  addEventListener('blur',()=>{keys.clear();mouse.left=mouse.right=false;});
+  cv.addEventListener('mousemove',e=>{mouse.sx=e.clientX;mouse.sy=e.clientY;mouse.in=true;});
+  cv.addEventListener('mouseleave',()=>{mouse.in=false;mouse.left=mouse.right=false;});
+  cv.addEventListener('mousedown',e=>{mouse.in=true;mouse.sx=e.clientX;mouse.sy=e.clientY;if(e.button===0)mouse.left=true;if(e.button===2){mouse.right=true;lastPlace=-1;}});
+  addEventListener('mouseup',e=>{if(e.button===0)mouse.left=false;if(e.button===2)mouse.right=false;});
+  cv.addEventListener('contextmenu',e=>e.preventDefault());
+  cv.addEventListener('wheel',e=>{e.preventDefault();if(!S)return;S.sel=mod(S.sel+(e.deltaY>0?1:-1),9);invDirty=true;},{passive:false});
+  addEventListener('resize',resize);
+  $('helpBtn').addEventListener('click',()=>{const h=$('help');h.classList.toggle('min');$('helpBtn').textContent=h.classList.contains('min')?'Show':'Hide';try{localStorage.setItem('lodeforge-help',h.classList.contains('min')?'0':'1');}catch(err){}});
+  $('closePack').addEventListener('click',()=>setPack(false));
+  $('pack').addEventListener('mousedown',e=>{if(e.target.id==='pack')setPack(false);});
+  $('winClose').addEventListener('click',()=>{$('win').hidden=true;});
+  const nw=$('newWorld'); let armed=false;
+  nw.addEventListener('click',()=>{
+    if(!armed){armed=true;nw.textContent='Click again to erase this world';nw.className='warn';setTimeout(()=>{armed=false;nw.textContent='New world';nw.className='ghost';},3000);return;}
+    armed=false;nw.textContent='New world';nw.className='ghost';
+    S=genWorld((Math.random()*1e9)|0);indexVents();setPack(false);invDirty=hudDirty=netDirty=true;save();toast('A new hold, freshly delved.',true);
+  });
+  $('saveFile').addEventListener('click',saveWorldFile);
+  $('loadFile').addEventListener('click',()=>$('loadInput').click());
+  $('loadInput').addEventListener('change',async e=>{
+    const f=e.target.files&&e.target.files[0]; e.target.value=''; if(!f) return;
+    try{useWorld(await unpackWorld(await f.text()),f.name);}catch(err){toast('Could not load '+f.name+': '+err.message);}
+  });
+  $('autoFile').addEventListener('click',()=>{if(fileH&&!fileOk)resumeWorldFile();else chooseWorldFile();});
+  $('stopFile').addEventListener('click',stopWorldFile);
+  addEventListener('visibilitychange',()=>{if(document.hidden&&S){save();writeWorldFile();}});
+  addEventListener('pagehide',()=>{if(S)save();});
+}
+
+// ---------- loop ----------
+let last=performance.now(), saveT=0, simT=0, waterFlip=0;
+// What the body cares about is each gas's partial pressure (1 kg per tile is about 1 bar; normal air is
+// 0.21 bar oxygen + 0.79 bar nitrogen). Below about 0.14 bar of oxygen you suffocate. Oxygen above 1.6 bar
+// is acutely toxic (the divers' limit). CO2 above 0.1 bar (10%) poisons. Nitrogen is harmless but takes up room:
+// a space full of nitrogen has no oxygen in it. At 4 bar total the pressure itself crushes, even while
+// holding your breath.
+// Air at 60 °C or more scorches: it hurts, and you hold your breath rather than breathe it.
+const O2_TOXIC=1.6, O2_MIN=.14, CO2_TOXIC=.1, P_CRUSH=4;
+function airProblem(i){
+  const o=pp(S.go,i), P=pres(i);
+  if(S.wa[i]>=.5) return 'Underwater';
+  if(P>=P_CRUSH) return 'Crushing pressure';
+  if(S.tk[i]>=T_HOT) return 'Scorching heat';
+  if(o>=O2_TOXIC) return 'Oxygen too rich: toxic';
+  if(pp(S.gc,i)>=CO2_TOXIC) return 'CO₂ poisoning';
+  if(o<O2_MIN) return 'Not enough oxygen';
+  return null;
+}
+const breathable=i=>!airProblem(i);
+const AIR_WARN={'Scorching heat':'This air is 60 °C or hotter and is burning you. Get out of the heat. Hot air rises, so try lower down.','Underwater':'You are underwater. Hold your breath and swim up.','Crushing pressure':'Crushing pressure (4 bar or more) is hurting you. Get out of here.','Oxygen too rich: toxic':'Oxygen above 1.6 bar is toxic. Hold your breath and get back to normal air.','CO₂ poisoning':'CO₂ above 0.1 bar is poisoning you. Hold your breath and climb above it.','Not enough oxygen':'Not enough oxygen to breathe. You can hold your breath for about 45 seconds.'};
+function breathe(dt){
+  const p=S.player, hx=Math.floor(p.x+p.w/2), hy=Math.floor(p.y+.35), i=hy*WW+hx;
+  const prob=airProblem(i), ok=!prob;
+  if(prob&&prob!==p.prob) toast(AIR_WARN[prob]);
+  p.ok=ok; p.prob=prob;
+  if(prob==='Crushing pressure') p.hp-=dt*.06*pres(i)/P_CRUSH;
+  if(prob==='Scorching heat') p.hp-=dt*.03*(S.tk[i]-T_HOT+20)/20;
+  if(ok){
+    const got=takeGas(hx,hy,'o',.012*dt,0); addGas(hx,hy,'c',got);
+    p.breath=Math.min(1,p.breath+dt*.3); p.hp=Math.min(1,p.hp+dt*.03);
+  } else {
+    p.breath=Math.max(0,p.breath-dt/45);
+    if(p.breath<=0) p.hp-=dt*.1;
+  }
+  if(p.hp<=0){
+    p.x=S.core.x+2.15; p.y=S.core.y-.75; p.vx=p.vy=0; p.hp=.6; p.breath=1;
+    toast('You passed out from bad air and woke at the Great Forge.',true);
+  }
+}
+function update(dt){
+  S.time+=dt;
+  updatePlayer(dt);
+  breathe(dt);
+  simT+=dt;
+  while(simT>=.1){simT-=.1;gasStep();waterStep(S.tiles,S.wa,waterFlip^=1,S.tk,S.ic);}
+  if(boilFx.length){const p=S.player;for(const i of boilFx){const x=i%WW,y=(i/WW)|0;if(Math.random()<.15&&Math.abs(x-p.x)<30&&Math.abs(y-p.y)<20&&S.seen[i])puff(x+.5,y+.8,'s');}boilFx=[];}
+  tickVents(dt);
+  addGas(S.core.x,S.core.y-1,'o',.03*dt); // the Forge breathes a little oxygen
+  seenT-=dt; if(seenT<=0){seenT=.2;revealView();}
+  updateDoors();
+  monT-=dt; if(monT<=0||!mon){monT=1;scanMonitors();}
+  if(netDirty) rebuildNets();
+  for(const n of nets){n.cap=0;n.dem=0;}
+  for(const e of S.ents.values()) tickEnt(e,dt);
+  for(const n of nets){
+    n.sat=n.dem>0?Math.min(1,n.cap/n.dem):(n.cap>0?1:0);
+    n.load=n.cap>0?Math.min(1,n.dem/n.cap):0;
+    n.lastCap=n.cap; n.lastDem=n.dem;
+  }
+  for(const gn of gens){
+    const n=netOf(gn); if(!n||gn.fuel<=0) continue;
+    const burn=dt*n.load; if(burn<=0) continue;
+    if(gn.type==='generator'){
+      if(gn.water<=.01) continue;
+      // the coal fire heats the boiler, not the room: only STEAM_LEAK of its heat escapes into the air.
+      // The rest boils water; the spent steam vents above at about 105 °C and gives its heat to the room
+      // as it condenses, raining back down (a boiler standing in a basin reuses most of its water).
+      gn.air=burnAir(gn,.09*burn,STEAM_LEAK);
+      const ok=Math.min(1,gn.air), use=Math.min(gn.water,STEAM_USE*burn*ok);
+      const ex=(gn.y-1)*WW+gn.x;
+      if(use>0){
+        if(gasOpen(gn.x,gn.y-1)&&pres(ex)>STEAM_BACKP||!addGas(gn.x,gn.y-1,'s',use*SPW,105)) gn.blockT=1;
+        else gn.water-=use;
+      }
+      gn.fuel=Math.max(0,gn.fuel-burn*ok);
+      continue;
+    }
+    gn.air=burnAir(gn,.08*burn);
+    gn.fuel=Math.max(0,gn.fuel-burn*Math.min(1,gn.air));
+  }
+  for(let k=puffs.length-1;k>=0;k--){const q=puffs[k];q.x+=q.vx*dt;q.y+=q.vy*dt;q.vy*=1-dt*.6;q.life-=dt;if(q.life<=0)puffs.splice(k,1);}
+  handleMining(dt);
+  if(mouse.right&&mouse.in&&!uiOpen()){const {tx,ty}=mouseTile();const k=ty*WW+tx;if(k!==lastPlace&&tryPlace(tx,ty))lastPlace=k;}
+  for(let k=parts.length-1;k>=0;k--){const q=parts[k];q.vy+=30*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt;if(q.life<=0)parts.splice(k,1);}
+  coreFlash=Math.max(0,coreFlash-dt*2);
+}
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000); last=now;
+  if(S){
+    const steps=dt>1/50?2:1; for(let k=0;k<steps;k++) update(dt/steps);
+    render(); hud(dt);
+    saveT+=dt; if(saveT>20){saveT=0;save();writeWorldFile();}
+  }
+  requestAnimationFrame(frame);
+}
+function start(data){
+  toastEl=$('toasts');
+  buildTextures(); buildIcons(); resize(); bindEvents();
+  try{if(localStorage.getItem('lodeforge-help')==='0'){$('help').classList.add('min');$('helpBtn').textContent='Show';}}catch(err){}
+  let loaded=null;
+  if(data&&data.tiles){try{loaded=deserialize(data);}catch(err){}}
+  S=loaded||loadLocal()||genWorld((Math.random()*1e9)|0);
+  netDirty=true; indexVents(); S.player.ok=true; initWorldFiles();
+  $('closeRes').addEventListener('click',()=>setResearch(false));
+  $('research').addEventListener('mousedown',e=>{if(e.target.id==='research')setResearch(false);});
+  if(S.won) {/* already finished; no banner on reload */}
+  const coarse=window.matchMedia&&matchMedia('(pointer: coarse)').matches&&!matchMedia('(any-pointer: fine)').matches;
+  if(coarse) $('touchnote').hidden=false;
+  if(window.claude?.hot?.snapshot) window.claude.hot.snapshot(()=>S?serialize():{});
+  requestAnimationFrame(frame);
+}
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
+
+</body>
+</html>
